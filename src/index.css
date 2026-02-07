@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #0f172a;
+  background-color: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Avenir Next', 'Nunito Sans', 'Segoe UI', sans-serif;
+  min-height: 100vh;
+  background: radial-gradient(circle at top right, #dbeeff 0%, #f8fafc 45%);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
