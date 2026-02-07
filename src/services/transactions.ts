@@ -174,6 +174,23 @@ async function getTransactionById(transactionId: string): Promise<Transaction> {
   return mapTransaction(data as never);
 }
 
+async function getAuthenticatedUser() {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!user) {
+    throw new Error('You must be logged in.');
+  }
+
+  return user;
+}
+
 export async function runDueStatusTransition(timezone: string) {
   const { error } = await supabase.rpc('process_due_status_transitions', {
     p_timezone: timezone,
@@ -185,10 +202,40 @@ export async function runDueStatusTransition(timezone: string) {
 }
 
 export async function getProfile(): Promise<Profile> {
-  const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).single();
+  const user = await getAuthenticatedUser();
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(PROFILE_SELECT)
+    .eq('id', user.id)
+    .maybeSingle();
 
-  if (error || !data) {
-    throw error ?? new Error('Profile was not found.');
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    const { data: inserted, error: insertError } = await supabase
+      .from('profiles')
+      .upsert(
+        {
+          id: user.id,
+          email: user.email ?? '',
+          opening_balance: 0,
+          notifications_enabled: false,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          calendar_preference: 'AD',
+        },
+        { onConflict: 'id' },
+      )
+      .select(PROFILE_SELECT)
+      .eq('id', user.id)
+      .single();
+
+    if (insertError || !inserted) {
+      throw insertError ?? new Error('Profile was not found.');
+    }
+
+    return mapProfile(inserted);
   }
 
   return mapProfile(data);
@@ -200,6 +247,9 @@ export async function updateProfile(payload: {
   timezone?: string;
   calendarPreference?: 'AD' | 'BS';
 }): Promise<Profile> {
+  const user = await getAuthenticatedUser();
+  await getProfile();
+
   const updatePayload: Record<string, unknown> = {};
 
   if (typeof payload.openingBalance === 'number') {
@@ -218,6 +268,7 @@ export async function updateProfile(payload: {
   const { data, error } = await supabase
     .from('profiles')
     .update(updatePayload)
+    .eq('id', user.id)
     .select(PROFILE_SELECT)
     .single();
 

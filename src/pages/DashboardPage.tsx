@@ -7,6 +7,21 @@ import { toIsoDate } from '@/utils/date';
 import type { Account, Profile, Transaction } from '@/types/domain';
 import { getAccounts, getProfile, getTransactions, runDueStatusTransition } from '@/services/transactions';
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
 export function DashboardPage() {
   const { mode } = useCalendar();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -22,14 +37,22 @@ export function DashboardPage() {
 
     try {
       const profileData = await getProfile();
-      await runDueStatusTransition(profileData.timezone);
+      try {
+        await runDueStatusTransition(profileData.timezone);
+      } catch (transitionError) {
+        // Keep dashboard usable even if RPC is missing or temporarily unavailable.
+        console.warn(
+          'Unable to run due status transition:',
+          getErrorMessage(transitionError, 'Transition error'),
+        );
+      }
       const [accountsData, transactionData] = await Promise.all([getAccounts(), getTransactions()]);
 
       setProfile(profileData);
       setAccounts(accountsData);
       setTransactions(transactionData);
     } catch (loadError) {
-      const message = loadError instanceof Error ? loadError.message : 'Unable to load dashboard.';
+      const message = getErrorMessage(loadError, 'Unable to load dashboard.');
       setError(message);
     } finally {
       setLoading(false);

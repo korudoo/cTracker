@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import type { CalendarMode, Transaction } from '@/types/domain';
-import { calculateProjectedBalanceOnDate } from '@/utils/balance';
+import { calculateProjectedBalancesForRange, getBufferedDateRange } from '@/utils/balanceProjection';
 import { formatMonthLabel, getMonthGrid, isSameDate, shiftMonth, toIsoDate } from '@/utils/date';
 import { adToBs } from '@/utils/nepaliDate';
 
@@ -36,8 +37,28 @@ export function CalendarView({
   transactions,
   onMonthDateChange,
 }: CalendarViewProps) {
-  const grid = getMonthGrid(monthDate);
+  const grid = useMemo(() => getMonthGrid(monthDate), [monthDate]);
   const today = new Date();
+  const dueCountByDate = useMemo(() => {
+    const counts: Record<string, number> = {};
+    transactions.forEach((transaction) => {
+      counts[transaction.dueDate] = (counts[transaction.dueDate] ?? 0) + 1;
+    });
+    return counts;
+  }, [transactions]);
+
+  const projectionByDate = useMemo(() => {
+    const firstCellIso = toIsoDate(grid[0]);
+    const lastCellIso = toIsoDate(grid[grid.length - 1]);
+    const range = getBufferedDateRange(firstCellIso, lastCellIso, 3, 3);
+
+    return calculateProjectedBalancesForRange({
+      currentBalance,
+      transactions,
+      startDate: range.startDate,
+      endDate: range.endDate,
+    }).byDate;
+  }, [currentBalance, grid, transactions]);
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
@@ -83,8 +104,8 @@ export function CalendarView({
       <div className="mt-2 grid grid-cols-7 gap-1">
         {grid.map((day) => {
           const dayIso = toIsoDate(day);
-          const dayTransactions = transactions.filter((transaction) => transaction.dueDate === dayIso);
-          const projection = calculateProjectedBalanceOnDate(currentBalance, transactions, dayIso);
+          const projection = projectionByDate[dayIso]?.projectedBalance ?? currentBalance;
+          const dueItemsCount = dueCountByDate[dayIso] ?? 0;
           const inCurrentMonth = day.getMonth() === monthDate.getMonth();
           const isToday = isSameDate(day, today);
 
@@ -113,7 +134,7 @@ export function CalendarView({
                 {currencyShort(projection)}
               </p>
 
-              <p className="mt-1 text-[11px] text-slate-500">Due items: {dayTransactions.length}</p>
+              <p className="mt-1 text-[11px] text-slate-500">Due items: {dueItemsCount}</p>
             </article>
           );
         })}

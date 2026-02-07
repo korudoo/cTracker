@@ -1,17 +1,11 @@
 import type { Transaction } from '@/types/domain';
+import {
+  calculateCurrentBalance as calculateCurrentBalanceFromProjection,
+  calculateProjectedBalancesForRange,
+} from '@/utils/balanceProjection';
 
 export function calculateCurrentBalance(openingBalance: number, transactions: Transaction[]): number {
-  const cleared = transactions.filter((transaction) => transaction.status === 'cleared');
-
-  const clearedDeposits = cleared
-    .filter((transaction) => transaction.type === 'deposit')
-    .reduce((total, transaction) => total + transaction.amount, 0);
-
-  const clearedOutflows = cleared
-    .filter((transaction) => transaction.type === 'cheque' || transaction.type === 'withdrawal')
-    .reduce((total, transaction) => total + transaction.amount, 0);
-
-  return openingBalance + clearedDeposits - clearedOutflows;
+  return calculateCurrentBalanceFromProjection(openingBalance, transactions);
 }
 
 export function calculateProjectedBalanceOnDate(
@@ -19,21 +13,14 @@ export function calculateProjectedBalanceOnDate(
   transactions: Transaction[],
   dateIso: string,
 ): number {
-  const projectionEligible = transactions.filter((transaction) => transaction.dueDate <= dateIso);
+  const projection = calculateProjectedBalancesForRange({
+    currentBalance,
+    transactions,
+    startDate: dateIso,
+    endDate: dateIso,
+  });
 
-  const projectedDeposits = projectionEligible
-    .filter((transaction) => transaction.type === 'deposit')
-    .reduce((total, transaction) => total + transaction.amount, 0);
-
-  const projectedCheques = projectionEligible
-    .filter((transaction) => transaction.type === 'cheque')
-    .reduce((total, transaction) => total + transaction.amount, 0);
-
-  const projectedWithdrawals = projectionEligible
-    .filter((transaction) => transaction.type === 'withdrawal')
-    .reduce((total, transaction) => total + transaction.amount, 0);
-
-  return currentBalance + projectedDeposits - projectedCheques - projectedWithdrawals;
+  return projection.byDate[dateIso]?.projectedBalance ?? currentBalance;
 }
 
 export function calculatePendingTotals(transactions: Transaction[]) {
