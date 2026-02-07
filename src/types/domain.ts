@@ -2,6 +2,12 @@ export type CalendarMode = 'AD' | 'BS';
 
 export type TransactionType = 'deposit' | 'cheque' | 'withdrawal';
 export type TransactionStatus = 'pending' | 'deducted' | 'cleared';
+export type NotificationReminderType =
+  | 'week_before'
+  | 'three_days_before'
+  | 'one_day_before'
+  | 'day_of'
+  | 'manual';
 
 export interface Profile {
   id: string;
@@ -53,6 +59,37 @@ export interface TransactionInput {
   payee: string | null;
   description: string | null;
   referenceNumber: string | null;
+}
+
+export interface NotificationSettings {
+  userId: string;
+  enableCheque: boolean;
+  enableDeposit: boolean;
+  enableWithdrawal: boolean;
+  timing1Week: boolean;
+  timing3Days: boolean;
+  timing1Day: boolean;
+  timingDayOf: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  deliveryTime: string;
+  timezone: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InAppNotification {
+  id: string;
+  userId: string;
+  transactionId: string | null;
+  accountId: string;
+  type: NotificationReminderType;
+  scheduledFor: string;
+  createdAt: string;
+  readAt: string | null;
+  title: string;
+  body: string;
 }
 
 export const TRANSACTION_TYPES: TransactionType[] = ['deposit', 'cheque', 'withdrawal'];

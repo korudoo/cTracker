@@ -2,6 +2,10 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AccountManager } from '@/components/settings/AccountManager';
 import { useCalendar } from '@/context/CalendarContext';
 import {
+  getNotificationSettings,
+  updateNotificationSettings,
+} from '@/services/notifications';
+import {
   adjustAccountOpeningBalance,
   createAccount,
   getAccounts,
@@ -10,7 +14,7 @@ import {
   runDueStatusTransition,
   updateProfile,
 } from '@/services/transactions';
-import type { Account, Transaction } from '@/types/domain';
+import type { Account, NotificationSettings, Transaction } from '@/types/domain';
 import { downloadCsv, toCsv } from '@/utils/csv';
 
 export function SettingsPage() {
@@ -21,6 +25,7 @@ export function SettingsPage() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   const [calendarPreference, setCalendarPreference] = useState<'AD' | 'BS'>('AD');
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
 
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [newOpeningBalance, setNewOpeningBalance] = useState('0');
@@ -28,6 +33,7 @@ export function SettingsPage() {
 
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [savingNotificationSettings, setSavingNotificationSettings] = useState(false);
   const [savingAccount, setSavingAccount] = useState(false);
   const [adjustingBalance, setAdjustingBalance] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -39,13 +45,18 @@ export function SettingsPage() {
 
     try {
       const profileData = await getProfile();
-      const [accountsData, transactionData] = await Promise.all([getAccounts(), getTransactions()]);
+      const [accountsData, transactionData, userNotificationSettings] = await Promise.all([
+        getAccounts(),
+        getTransactions(),
+        getNotificationSettings(),
+      ]);
 
       setAccounts(accountsData);
       setTransactions(transactionData);
       setNotificationsEnabled(profileData.notificationsEnabled);
       setTimezone(profileData.timezone);
       setCalendarPreference(profileData.calendarPreference);
+      setNotificationSettings(userNotificationSettings);
 
       if (accountsData.length > 0) {
         const firstAccount = accountsData[0];
@@ -65,6 +76,13 @@ export function SettingsPage() {
   }, [loadSettings]);
 
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId) ?? null;
+
+  const handleNotificationSettingChange = <K extends keyof NotificationSettings>(
+    key: K,
+    value: NotificationSettings[K],
+  ) => {
+    setNotificationSettings((previous) => (previous ? { ...previous, [key]: value } : previous));
+  };
 
   const handleSaveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -111,6 +129,43 @@ export function SettingsPage() {
       throw saveError;
     } finally {
       setSavingAccount(false);
+    }
+  };
+
+  const handleSaveNotificationSettings = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!notificationSettings) {
+      return;
+    }
+
+    setSavingNotificationSettings(true);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const updated = await updateNotificationSettings({
+        enableCheque: notificationSettings.enableCheque,
+        enableDeposit: notificationSettings.enableDeposit,
+        enableWithdrawal: notificationSettings.enableWithdrawal,
+        timing1Week: notificationSettings.timing1Week,
+        timing3Days: notificationSettings.timing3Days,
+        timing1Day: notificationSettings.timing1Day,
+        timingDayOf: notificationSettings.timingDayOf,
+        quietHoursEnabled: notificationSettings.quietHoursEnabled,
+        quietHoursStart: notificationSettings.quietHoursStart,
+        quietHoursEnd: notificationSettings.quietHoursEnd,
+        deliveryTime: notificationSettings.deliveryTime,
+        timezone: notificationSettings.timezone,
+      });
+
+      setNotificationSettings(updated);
+      setMessage('Notification settings saved.');
+    } catch (saveError) {
+      const nextError =
+        saveError instanceof Error ? saveError.message : 'Unable to update notification settings.';
+      setError(nextError);
+    } finally {
+      setSavingNotificationSettings(false);
     }
   };
 
@@ -279,6 +334,182 @@ export function SettingsPage() {
             </button>
           </div>
         </form>
+
+        <div className="mt-6 border-t border-slate-200 pt-5">
+          <h3 className="text-base font-semibold text-slate-900">In-App Notification Rules</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Configure reminder types, timing, and quiet hours for notification scheduling.
+          </p>
+
+          {notificationSettings ? (
+            <form className="mt-4 space-y-4" onSubmit={handleSaveNotificationSettings}>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.enableCheque}
+                    onChange={(event) =>
+                      handleNotificationSettingChange('enableCheque', event.target.checked)
+                    }
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Cheque reminders
+                </label>
+
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.enableDeposit}
+                    onChange={(event) =>
+                      handleNotificationSettingChange('enableDeposit', event.target.checked)
+                    }
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Deposit reminders
+                </label>
+
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.enableWithdrawal}
+                    onChange={(event) =>
+                      handleNotificationSettingChange('enableWithdrawal', event.target.checked)
+                    }
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Withdrawal reminders
+                </label>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-700">Timing options</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.timing1Week}
+                      onChange={(event) =>
+                        handleNotificationSettingChange('timing1Week', event.target.checked)
+                      }
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    1 week before
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.timing3Days}
+                      onChange={(event) =>
+                        handleNotificationSettingChange('timing3Days', event.target.checked)
+                      }
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    3 days before
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.timing1Day}
+                      onChange={(event) =>
+                        handleNotificationSettingChange('timing1Day', event.target.checked)
+                      }
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    1 day before
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.timingDayOf}
+                      onChange={(event) =>
+                        handleNotificationSettingChange('timingDayOf', event.target.checked)
+                      }
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    Day of due date
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block space-y-1">
+                  <span className="text-sm font-medium text-slate-700">Delivery Time</span>
+                  <input
+                    type="time"
+                    value={notificationSettings.deliveryTime}
+                    onChange={(event) =>
+                      handleNotificationSettingChange('deliveryTime', event.target.value)
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                </label>
+
+                <label className="block space-y-1">
+                  <span className="text-sm font-medium text-slate-700">Notification Timezone</span>
+                  <input
+                    type="text"
+                    value={notificationSettings.timezone}
+                    onChange={(event) =>
+                      handleNotificationSettingChange('timezone', event.target.value)
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                    required
+                  />
+                </label>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={notificationSettings.quietHoursEnabled}
+                  onChange={(event) =>
+                    handleNotificationSettingChange('quietHoursEnabled', event.target.checked)
+                  }
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                Enable quiet hours
+              </label>
+
+              {notificationSettings.quietHoursEnabled ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block space-y-1">
+                    <span className="text-sm font-medium text-slate-700">Quiet Hours Start</span>
+                    <input
+                      type="time"
+                      value={notificationSettings.quietHoursStart}
+                      onChange={(event) =>
+                        handleNotificationSettingChange('quietHoursStart', event.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-sm font-medium text-slate-700">Quiet Hours End</span>
+                    <input
+                      type="time"
+                      value={notificationSettings.quietHoursEnd}
+                      onChange={(event) =>
+                        handleNotificationSettingChange('quietHoursEnd', event.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                    />
+                  </label>
+                </div>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={savingNotificationSettings}
+                className="rounded-lg border border-brand-300 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+              >
+                {savingNotificationSettings ? 'Saving...' : 'Save Notification Rules'}
+              </button>
+            </form>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">Loading notification rules...</p>
+          )}
+        </div>
 
         <div className="mt-6 border-t border-slate-200 pt-5">
           <h3 className="text-base font-semibold text-slate-900">Opening Balance Adjustment</h3>

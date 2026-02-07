@@ -4,7 +4,12 @@ import { NAV_ITEMS } from '@/components/layout/navigation';
 export function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white md:hidden">
-      <ul className="grid grid-cols-3">
+      <ul
+        className="grid"
+        style={{
+          gridTemplateColumns: `repeat(${NAV_ITEMS.length}, minmax(0, 1fr))`,
+        }}
+      >
         {NAV_ITEMS.map((item) => (
           <li key={item.to}>
             <NavLink
