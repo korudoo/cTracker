@@ -2,9 +2,13 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import type { CalendarMode, Transaction } from '@/types/domain';
 import { formatDateForMode } from '@/utils/nepaliDate';
 
+type DateFieldMode = 'dueDate' | 'createdDate';
+
 interface TransactionTableProps {
   transactions: Transaction[];
   calendarMode: CalendarMode;
+  dateField: DateFieldMode;
+  emptyMessage?: string;
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
 }
@@ -30,9 +34,13 @@ function getDetails(transaction: Transaction, calendarMode: CalendarMode): strin
 export function TransactionTable({
   transactions,
   calendarMode,
+  dateField,
+  emptyMessage = 'No transactions match the current filters.',
   onEdit,
   onDelete,
 }: TransactionTableProps) {
+  const dateLabel = dateField === 'createdDate' ? 'Created Date' : 'Due Date';
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
       <div className="mb-4 flex items-center justify-between">
@@ -44,7 +52,7 @@ export function TransactionTable({
         <table className="min-w-full divide-y divide-slate-200 text-sm">
           <thead>
             <tr className="text-left text-slate-500">
-              <th className="py-2 pr-4 font-medium">Due Date</th>
+              <th className="py-2 pr-4 font-medium">{dateLabel}</th>
               <th className="py-2 pr-4 font-medium">Account</th>
               <th className="py-2 pr-4 font-medium">Type</th>
               <th className="py-2 pr-4 font-medium">Amount</th>
@@ -58,7 +66,10 @@ export function TransactionTable({
             {transactions.map((transaction) => (
               <tr key={transaction.id}>
                 <td className="py-3 pr-4 text-slate-700">
-                  {formatDateForMode(transaction.dueDate, calendarMode)}
+                  {formatDateForMode(
+                    dateField === 'createdDate' ? transaction.createdDate : transaction.dueDate,
+                    calendarMode,
+                  )}
                 </td>
                 <td className="py-3 pr-4 text-slate-700">{transaction.accountName}</td>
                 <td className="py-3 pr-4 capitalize text-slate-700">{transaction.type}</td>
@@ -102,7 +113,7 @@ export function TransactionTable({
       </div>
 
       {!transactions.length ? (
-        <p className="py-6 text-center text-sm text-slate-500">No transactions yet.</p>
+        <p className="py-6 text-center text-sm text-slate-500">{emptyMessage}</p>
       ) : null}
     </section>
   );

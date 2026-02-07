@@ -1,10 +1,37 @@
 import { supabase } from '@/lib/supabaseClient';
-import type { Account, Profile, Transaction, TransactionInput } from '@/types/domain';
+import type {
+  Account,
+  Profile,
+  Transaction,
+  TransactionInput,
+  TransactionStatus,
+  TransactionType,
+} from '@/types/domain';
 
 const PROFILE_SELECT =
   'id,email,opening_balance,notifications_enabled,timezone,calendar_preference,created_at,updated_at';
 
 const TRANSACTION_SELECT = '*,accounts(name)';
+
+export type TransactionSortField = 'date' | 'amount' | 'status' | 'type';
+export type DateFieldMode = 'dueDate' | 'createdDate';
+export type SortDirection = 'asc' | 'desc';
+
+export interface GetTransactionsParams {
+  type?: TransactionType | 'all';
+  status?: TransactionStatus | 'all';
+  searchText?: string;
+  dateField?: DateFieldMode;
+  dateFrom?: string;
+  dateTo?: string;
+  amountMin?: number;
+  amountMax?: number;
+  sortBy?: TransactionSortField;
+  sortDirection?: SortDirection;
+  dateSortField?: DateFieldMode;
+  hideHistoricalCleared?: boolean;
+  historicalCutoffDate?: string;
+}
 
 function mapProfile(row: {
   id: string;
@@ -341,12 +368,80 @@ export async function adjustAccountOpeningBalance(input: {
   return mapAccount(updatedAccount);
 }
 
-export async function getTransactions(): Promise<Transaction[]> {
-  const { data, error } = await supabase
-    .from('transactions')
-    .select(TRANSACTION_SELECT)
-    .order('due_date', { ascending: true })
-    .order('created_at', { ascending: false });
+function mapDateField(field: DateFieldMode): 'due_date' | 'created_date' {
+  return field === 'createdDate' ? 'created_date' : 'due_date';
+}
+
+export async function getTransactions(params: GetTransactionsParams = {}): Promise<Transaction[]> {
+  const {
+    type = 'all',
+    status = 'all',
+    searchText = '',
+    dateField = 'dueDate',
+    dateFrom,
+    dateTo,
+    amountMin,
+    amountMax,
+    sortBy = 'date',
+    sortDirection = 'asc',
+    dateSortField = 'dueDate',
+    hideHistoricalCleared = false,
+    historicalCutoffDate,
+  } = params;
+
+  let query = supabase.from('transactions').select(TRANSACTION_SELECT);
+
+  if (type !== 'all') {
+    query = query.eq('type', type);
+  }
+
+  if (status !== 'all') {
+    query = query.eq('status', status);
+  }
+
+  const trimmedText = searchText.trim();
+  if (trimmedText) {
+    const escaped = trimmedText.replace(/[%_,]/g, (match) => `\\${match}`);
+    query = query.or(`payee.ilike.%${escaped}%,description.ilike.%${escaped}%`);
+  }
+
+  const dateColumn = mapDateField(dateField);
+
+  if (dateFrom) {
+    query = query.gte(dateColumn, dateFrom);
+  }
+
+  if (dateTo) {
+    query = query.lte(dateColumn, dateTo);
+  }
+
+  if (typeof amountMin === 'number' && Number.isFinite(amountMin)) {
+    query = query.gte('amount', amountMin);
+  }
+
+  if (typeof amountMax === 'number' && Number.isFinite(amountMax)) {
+    query = query.lte('amount', amountMax);
+  }
+
+  if (hideHistoricalCleared && historicalCutoffDate) {
+    query = query.or(
+      `status.neq.cleared,and(status.eq.cleared,due_date.gte.${historicalCutoffDate})`,
+    );
+  }
+
+  const sortColumn =
+    sortBy === 'date'
+      ? mapDateField(dateSortField)
+      : sortBy === 'amount'
+        ? 'amount'
+        : sortBy === 'status'
+          ? 'status'
+          : 'type';
+
+  const ascending = sortDirection === 'asc';
+  query = query.order(sortColumn, { ascending }).order('created_at', { ascending: false });
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;
@@ -354,6 +449,41 @@ export async function getTransactions(): Promise<Transaction[]> {
 
   return (data ?? []).map((row) => mapTransaction(row as never));
 }
+
+export const getTransactionsWithFilters = getTransactions;
+
+export async function chequeNumberExistsForAccount(options: {
+  accountId: string;
+  chequeNumber: string;
+  excludeTransactionId?: string;
+}): Promise<boolean> {
+  const normalizedChequeNumber = options.chequeNumber.trim();
+  if (!normalizedChequeNumber) {
+    return false;
+  }
+
+  let query = supabase
+    .from('transactions')
+    .select('id')
+    .eq('account_id', options.accountId)
+    .eq('type', 'cheque')
+    .eq('cheque_number', normalizedChequeNumber)
+    .limit(1);
+
+  if (options.excludeTransactionId) {
+    query = query.neq('id', options.excludeTransactionId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data && data.length > 0);
+}
+
+export const chequeNumberExistsInAccount = chequeNumberExistsForAccount;
 
 export async function createTransaction(input: TransactionInput): Promise<Transaction> {
   const payload = normalizeTransactionInput(input);
