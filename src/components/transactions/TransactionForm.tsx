@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, type SubmitHandler } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { DateField } from '@/components/common/DateField';
@@ -86,62 +86,101 @@ export function TransactionForm({
 }: TransactionFormProps) {
   const todayIso = toIsoDate(new Date());
 
-  const validationSchema = useMemo(
+  const validationSchema: yup.ObjectSchema<TransactionFormValues> = useMemo(
     () =>
-      yup.object({
-        accountId: yup.string().required('Account is required.'),
-        type: yup
-          .mixed<TransactionType>()
-          .oneOf(TRANSACTION_TYPES)
-          .required('Transaction type is required.'),
-        status: yup
-          .mixed<TransactionStatus>()
-          .oneOf(TRANSACTION_STATUSES)
-          .required('Status is required.'),
-        amount: yup
-          .number()
-          .typeError('Amount must be a number.')
-          .moreThan(0, 'Amount must be greater than 0.')
-          .required('Amount is required.'),
-        dueDate: yup
-          .string()
-          .required('Due date is required.')
-          .test('cheque-due-date', 'Cheque date cannot be in the past.', function validate(value) {
-            if (!value) return false;
-            if (this.parent.type !== 'cheque') return true;
-            return value >= todayIso;
-          }),
-        createdDate: yup
-          .string()
-          .required('Created date is required.')
-          .test('written-date-not-future', 'Written date cannot be in the future.', function validate(value) {
-            if (!value) return false;
-            if (this.parent.type !== 'cheque') return true;
-            return value <= todayIso;
-          })
-          .test('written-before-due', 'Written date cannot be after cheque date.', function validate(value) {
-            if (!value) return false;
-            if (this.parent.type !== 'cheque') return true;
-            const dueDate: string | undefined = this.parent.dueDate;
-            if (!dueDate) return true;
-            return value <= dueDate;
-          }),
-        chequeNumber: yup.string().test('cheque-number-rule', 'Cheque number is required.', function validate(value) {
-          if (this.parent.type !== 'cheque') return true;
-          return Boolean(value && value.trim().length > 0);
-        }),
-        payee: yup.string().test('payee-rule', 'Payee is required for cheque.', function validate(value) {
-          if (this.parent.type !== 'cheque') return true;
-          return Boolean(value && value.trim().length > 0);
-        }),
-        description: yup
-          .string()
-          .test('description-rule', 'Description is required.', function validate(value) {
-            if (this.parent.type === 'cheque') return true;
-            return Boolean(value && value.trim().length > 0);
-          }),
-        referenceNumber: yup.string().optional(),
-      }),
+      yup
+        .object({
+          accountId: yup.string().required('Account is required.').defined(),
+          type: yup
+            .mixed<TransactionType>()
+            .oneOf(TRANSACTION_TYPES)
+            .required('Transaction type is required.')
+            .defined(),
+          status: yup
+            .mixed<TransactionStatus>()
+            .oneOf(TRANSACTION_STATUSES)
+            .required('Status is required.')
+            .defined(),
+          amount: yup
+            .number()
+            .typeError('Amount must be a number.')
+            .moreThan(0, 'Amount must be greater than 0.')
+            .required('Amount is required.')
+            .defined(),
+          dueDate: yup
+            .string()
+            .required('Due date is required.')
+            .defined()
+            .test(
+              'cheque-due-date',
+              'Cheque date cannot be in the past.',
+              function (this: yup.TestContext, value?: string) {
+                const parent = this.parent as TransactionFormValues;
+                if (parent.type !== 'cheque') return true;
+                return Boolean(value && value >= todayIso);
+              },
+            ),
+          createdDate: yup
+            .string()
+            .required('Created date is required.')
+            .defined()
+            .test(
+              'written-date-not-future',
+              'Written date cannot be in the future.',
+              function (this: yup.TestContext, value?: string) {
+                const parent = this.parent as TransactionFormValues;
+                if (parent.type !== 'cheque') return true;
+                return Boolean(value && value <= todayIso);
+              },
+            )
+            .test(
+              'written-before-due',
+              'Written date cannot be after cheque date.',
+              function (this: yup.TestContext, value?: string) {
+                const parent = this.parent as TransactionFormValues;
+                if (parent.type !== 'cheque') return true;
+                return Boolean(value && value <= parent.dueDate);
+              },
+            ),
+          chequeNumber: yup
+            .string()
+            .defined()
+            .test(
+              'cheque-number-rule',
+              'Cheque number is required.',
+              function (this: yup.TestContext, value?: string) {
+                const parent = this.parent as TransactionFormValues;
+                if (parent.type !== 'cheque') return true;
+                return Boolean(value && value.trim().length > 0);
+              },
+            ),
+          payee: yup
+            .string()
+            .defined()
+            .test(
+              'payee-rule',
+              'Payee is required for cheque.',
+              function (this: yup.TestContext, value?: string) {
+                const parent = this.parent as TransactionFormValues;
+                if (parent.type !== 'cheque') return true;
+                return Boolean(value && value.trim().length > 0);
+              },
+            ),
+          description: yup
+            .string()
+            .defined()
+            .test(
+              'description-rule',
+              'Description is required.',
+              function (this: yup.TestContext, value?: string) {
+                const parent = this.parent as TransactionFormValues;
+                if (parent.type === 'cheque') return true;
+                return Boolean(value && value.trim().length > 0);
+              },
+            ),
+          referenceNumber: yup.string().defined(),
+        })
+        .required(),
     [todayIso],
   );
 
@@ -175,7 +214,7 @@ export function TransactionForm({
 
   const selectedType = watch('type');
 
-  const onFormSubmit = async (values: TransactionFormValues) => {
+  const onFormSubmit: SubmitHandler<TransactionFormValues> = async (values) => {
     setSubmitError(null);
 
     try {
@@ -281,7 +320,7 @@ export function TransactionForm({
         <Controller
           control={control}
           name="dueDate"
-          render={({ field }) => (
+          render={({ field }: { field: { value: string; onChange: (value: string) => void } }) => (
             <DateField
               id="due-date"
               label={selectedType === 'cheque' ? 'Cheque Date' : 'Due Date'}
@@ -299,7 +338,7 @@ export function TransactionForm({
             <Controller
               control={control}
               name="createdDate"
-              render={({ field }) => (
+              render={({ field }: { field: { value: string; onChange: (value: string) => void } }) => (
                 <DateField
                   id="created-date"
                   label="Written Date"

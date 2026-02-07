@@ -17,9 +17,9 @@ function formatCurrency(value: number) {
   });
 }
 
-function getDetails(transaction: Transaction): string {
+function getDetails(transaction: Transaction, calendarMode: CalendarMode): string {
   if (transaction.type === 'cheque') {
-    return `Payee: ${transaction.payee ?? '-'} | Written: ${transaction.createdDate}`;
+    return `Payee: ${transaction.payee ?? '-'} | Written: ${formatDateForMode(transaction.createdDate, calendarMode)}`;
   }
 
   return `${transaction.description ?? '-'}${
@@ -74,7 +74,9 @@ export function TransactionTable({
                   <StatusBadge status={transaction.status} />
                 </td>
                 <td className="py-3 pr-4 text-slate-700">{transaction.chequeNumber ?? '—'}</td>
-                <td className="py-3 pr-4 text-xs text-slate-600">{getDetails(transaction)}</td>
+                <td className="py-3 pr-4 text-xs text-slate-600">
+                  {getDetails(transaction, calendarMode)}
+                </td>
                 <td className="py-3 pr-4">
                   <div className="flex gap-2">
                     <button

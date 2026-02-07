@@ -37,6 +37,8 @@ export interface Database {
           user_id: string;
           name: string;
           is_default: boolean;
+          opening_balance: number;
+          current_balance: number;
           created_at: string;
         };
         Insert: {
@@ -44,11 +46,15 @@ export interface Database {
           user_id?: string;
           name: string;
           is_default?: boolean;
+          opening_balance?: number;
+          current_balance?: number;
           created_at?: string;
         };
         Update: {
           name?: string;
           is_default?: boolean;
+          opening_balance?: number;
+          current_balance?: number;
         };
       };
       transactions: {
@@ -60,8 +66,11 @@ export interface Database {
           amount: number;
           status: 'pending' | 'deducted' | 'cleared';
           due_date: string;
+          created_date: string;
           cheque_number: string | null;
-          note: string | null;
+          payee: string | null;
+          description: string | null;
+          reference_number: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -73,8 +82,11 @@ export interface Database {
           amount: number;
           status?: 'pending' | 'deducted' | 'cleared';
           due_date: string;
+          created_date?: string;
           cheque_number?: string | null;
-          note?: string | null;
+          payee?: string | null;
+          description?: string | null;
+          reference_number?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -84,8 +96,11 @@ export interface Database {
           amount?: number;
           status?: 'pending' | 'deducted' | 'cleared';
           due_date?: string;
+          created_date?: string;
           cheque_number?: string | null;
-          note?: string | null;
+          payee?: string | null;
+          description?: string | null;
+          reference_number?: string | null;
           updated_at?: string;
         };
       };
