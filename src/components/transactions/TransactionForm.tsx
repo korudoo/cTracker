@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as yup from 'yup';
 import { DateField } from '@/components/common/DateField';
 import type {
   Account,
@@ -20,28 +23,57 @@ interface TransactionFormProps {
   onCancelEdit: () => void;
 }
 
-function mapTransactionToInput(transaction: Transaction): TransactionInput {
-  return {
-    accountId: transaction.accountId,
-    type: transaction.type,
-    amount: transaction.amount,
-    status: transaction.status,
-    dueDate: transaction.dueDate,
-    chequeNumber: transaction.chequeNumber,
-    note: transaction.note,
-  };
+interface TransactionFormValues {
+  accountId: string;
+  type: TransactionType;
+  status: TransactionStatus;
+  amount: number;
+  dueDate: string;
+  createdDate: string;
+  chequeNumber: string;
+  payee: string;
+  description: string;
+  referenceNumber: string;
 }
 
-function buildDefaultInput(accounts: Account[]): TransactionInput {
+function getDefaultValues(accounts: Account[]): TransactionFormValues {
+  const today = toIsoDate(new Date());
   return {
     accountId: accounts[0]?.id ?? '',
     type: 'cheque',
-    amount: 0,
     status: 'pending',
-    dueDate: toIsoDate(new Date()),
+    amount: 0,
+    dueDate: today,
+    createdDate: today,
     chequeNumber: '',
-    note: '',
+    payee: '',
+    description: '',
+    referenceNumber: '',
   };
+}
+
+function mapTransactionToForm(transaction: Transaction): TransactionFormValues {
+  return {
+    accountId: transaction.accountId,
+    type: transaction.type,
+    status: transaction.status,
+    amount: transaction.amount,
+    dueDate: transaction.dueDate,
+    createdDate: transaction.createdDate,
+    chequeNumber: transaction.chequeNumber ?? '',
+    payee: transaction.payee ?? '',
+    description: transaction.description ?? '',
+    referenceNumber: transaction.referenceNumber ?? '',
+  };
+}
+
+function trimOrEmpty(value: string): string {
+  return value.trim();
+}
+
+function trimOrNull(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 export function TransactionForm({
@@ -52,58 +84,122 @@ export function TransactionForm({
   onSubmit,
   onCancelEdit,
 }: TransactionFormProps) {
-  const defaultInput = useMemo(() => buildDefaultInput(accounts), [accounts]);
-  const [formData, setFormData] = useState<TransactionInput>(defaultInput);
-  const [error, setError] = useState<string | null>(null);
+  const todayIso = toIsoDate(new Date());
+
+  const validationSchema = useMemo(
+    () =>
+      yup.object({
+        accountId: yup.string().required('Account is required.'),
+        type: yup
+          .mixed<TransactionType>()
+          .oneOf(TRANSACTION_TYPES)
+          .required('Transaction type is required.'),
+        status: yup
+          .mixed<TransactionStatus>()
+          .oneOf(TRANSACTION_STATUSES)
+          .required('Status is required.'),
+        amount: yup
+          .number()
+          .typeError('Amount must be a number.')
+          .moreThan(0, 'Amount must be greater than 0.')
+          .required('Amount is required.'),
+        dueDate: yup
+          .string()
+          .required('Due date is required.')
+          .test('cheque-due-date', 'Cheque date cannot be in the past.', function validate(value) {
+            if (!value) return false;
+            if (this.parent.type !== 'cheque') return true;
+            return value >= todayIso;
+          }),
+        createdDate: yup
+          .string()
+          .required('Created date is required.')
+          .test('written-date-not-future', 'Written date cannot be in the future.', function validate(value) {
+            if (!value) return false;
+            if (this.parent.type !== 'cheque') return true;
+            return value <= todayIso;
+          })
+          .test('written-before-due', 'Written date cannot be after cheque date.', function validate(value) {
+            if (!value) return false;
+            if (this.parent.type !== 'cheque') return true;
+            const dueDate: string | undefined = this.parent.dueDate;
+            if (!dueDate) return true;
+            return value <= dueDate;
+          }),
+        chequeNumber: yup.string().test('cheque-number-rule', 'Cheque number is required.', function validate(value) {
+          if (this.parent.type !== 'cheque') return true;
+          return Boolean(value && value.trim().length > 0);
+        }),
+        payee: yup.string().test('payee-rule', 'Payee is required for cheque.', function validate(value) {
+          if (this.parent.type !== 'cheque') return true;
+          return Boolean(value && value.trim().length > 0);
+        }),
+        description: yup
+          .string()
+          .test('description-rule', 'Description is required.', function validate(value) {
+            if (this.parent.type === 'cheque') return true;
+            return Boolean(value && value.trim().length > 0);
+          }),
+        referenceNumber: yup.string().optional(),
+      }),
+    [todayIso],
+  );
+
+  const defaultValues = useMemo(() => getDefaultValues(accounts), [accounts]);
+
+  const {
+    control,
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<TransactionFormValues>({
+    resolver: yupResolver(validationSchema),
+    mode: 'onBlur',
+    defaultValues,
+  });
+
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialTransaction) {
-      setFormData(mapTransactionToInput(initialTransaction));
-    } else {
-      setFormData(defaultInput);
-    }
-    setError(null);
-  }, [defaultInput, initialTransaction]);
-
-  const handleTypeChange = (type: TransactionType) => {
-    setFormData((previous) => ({
-      ...previous,
-      type,
-      chequeNumber: type === 'cheque' ? previous.chequeNumber ?? '' : null,
-    }));
-  };
-
-  const handleStatusChange = (status: TransactionStatus) => {
-    setFormData((previous) => ({ ...previous, status }));
-  };
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
-
-    if (!formData.accountId) {
-      setError('Select an account before saving.');
+      reset(mapTransactionToForm(initialTransaction));
+      setSubmitError(null);
       return;
     }
 
-    if (!formData.dueDate) {
-      setError('Due date is required.');
-      return;
-    }
+    reset(defaultValues);
+    setSubmitError(null);
+  }, [defaultValues, initialTransaction, reset]);
+
+  const selectedType = watch('type');
+
+  const onFormSubmit = async (values: TransactionFormValues) => {
+    setSubmitError(null);
 
     try {
       await onSubmit({
-        ...formData,
-        amount: Number(formData.amount),
-        chequeNumber: formData.type === 'cheque' ? formData.chequeNumber : null,
+        accountId: values.accountId,
+        type: values.type,
+        status: values.status,
+        amount: Number(values.amount),
+        dueDate: values.dueDate,
+        createdDate: values.type === 'cheque' ? values.createdDate : values.createdDate || todayIso,
+        chequeNumber: values.type === 'cheque' ? trimOrEmpty(values.chequeNumber) : null,
+        payee: values.type === 'cheque' ? trimOrEmpty(values.payee) : null,
+        description: values.type === 'cheque' ? null : trimOrEmpty(values.description),
+        referenceNumber:
+          values.type === 'deposit' || values.type === 'withdrawal'
+            ? trimOrNull(values.referenceNumber)
+            : null,
       });
 
       if (!initialTransaction) {
-        setFormData(defaultInput);
+        reset(defaultValues);
       }
-    } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : 'Unable to save transaction.';
-      setError(message);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Unable to save transaction.');
     }
   };
 
@@ -124,30 +220,12 @@ export function TransactionForm({
         ) : null}
       </div>
 
-      <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
-        <label className="block space-y-1">
-          <span className="text-sm font-medium text-slate-700">Account</span>
-          <select
-            value={formData.accountId}
-            onChange={(event) => setFormData((previous) => ({ ...previous, accountId: event.target.value }))}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            required
-          >
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
+      <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit(onFormSubmit)}>
         <label className="block space-y-1">
           <span className="text-sm font-medium text-slate-700">Type</span>
           <select
-            value={formData.type}
-            onChange={(event) => handleTypeChange(event.target.value as TransactionType)}
+            {...register('type')}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            required
           >
             {TRANSACTION_TYPES.map((type) => (
               <option key={type} value={type}>
@@ -155,33 +233,41 @@ export function TransactionForm({
               </option>
             ))}
           </select>
+          {errors.type ? <p className="text-xs text-rose-600">{errors.type.message}</p> : null}
+        </label>
+
+        <label className="block space-y-1">
+          <span className="text-sm font-medium text-slate-700">Account</span>
+          <select
+            {...register('accountId')}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+          >
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+          {errors.accountId ? <p className="text-xs text-rose-600">{errors.accountId.message}</p> : null}
         </label>
 
         <label className="block space-y-1">
           <span className="text-sm font-medium text-slate-700">Amount</span>
           <input
             type="number"
-            min="0"
             step="0.01"
-            value={formData.amount || ''}
-            onChange={(event) =>
-              setFormData((previous) => ({
-                ...previous,
-                amount: Number(event.target.value),
-              }))
-            }
+            min="0"
+            {...register('amount', { valueAsNumber: true })}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            required
           />
+          {errors.amount ? <p className="text-xs text-rose-600">{errors.amount.message}</p> : null}
         </label>
 
         <label className="block space-y-1">
           <span className="text-sm font-medium text-slate-700">Status</span>
           <select
-            value={formData.status}
-            onChange={(event) => handleStatusChange(event.target.value as TransactionStatus)}
+            {...register('status')}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            required
           >
             {TRANSACTION_STATUSES.map((status) => (
               <option key={status} value={status}>
@@ -189,46 +275,95 @@ export function TransactionForm({
               </option>
             ))}
           </select>
+          {errors.status ? <p className="text-xs text-rose-600">{errors.status.message}</p> : null}
         </label>
 
-        <DateField
-          id="due-date"
-          label="Due Date"
-          mode={calendarMode}
-          value={formData.dueDate}
-          onChange={(nextDate) => setFormData((previous) => ({ ...previous, dueDate: nextDate }))}
-          required
-        />
-
-        {formData.type === 'cheque' ? (
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Cheque Number</span>
-            <input
-              type="text"
-              value={formData.chequeNumber ?? ''}
-              onChange={(event) =>
-                setFormData((previous) => ({
-                  ...previous,
-                  chequeNumber: event.target.value,
-                }))
-              }
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+        <Controller
+          control={control}
+          name="dueDate"
+          render={({ field }) => (
+            <DateField
+              id="due-date"
+              label={selectedType === 'cheque' ? 'Cheque Date' : 'Due Date'}
+              mode={calendarMode}
+              value={field.value}
+              onChange={field.onChange}
               required
             />
-          </label>
-        ) : null}
+          )}
+        />
+        {errors.dueDate ? <p className="md:col-span-2 -mt-3 text-xs text-rose-600">{errors.dueDate.message}</p> : null}
 
-        <label className="block space-y-1 md:col-span-2">
-          <span className="text-sm font-medium text-slate-700">Note</span>
-          <textarea
-            rows={3}
-            value={formData.note ?? ''}
-            onChange={(event) => setFormData((previous) => ({ ...previous, note: event.target.value }))}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-          />
-        </label>
+        {selectedType === 'cheque' ? (
+          <>
+            <Controller
+              control={control}
+              name="createdDate"
+              render={({ field }) => (
+                <DateField
+                  id="created-date"
+                  label="Written Date"
+                  mode={calendarMode}
+                  value={field.value}
+                  onChange={field.onChange}
+                  required
+                />
+              )}
+            />
+            {errors.createdDate ? (
+              <p className="md:col-span-2 -mt-3 text-xs text-rose-600">{errors.createdDate.message}</p>
+            ) : null}
 
-        {error ? <p className="text-sm text-rose-600 md:col-span-2">{error}</p> : null}
+            <label className="block space-y-1">
+              <span className="text-sm font-medium text-slate-700">Cheque Number</span>
+              <input
+                type="text"
+                {...register('chequeNumber')}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              />
+              {errors.chequeNumber ? (
+                <p className="text-xs text-rose-600">{errors.chequeNumber.message}</p>
+              ) : null}
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-sm font-medium text-slate-700">Payee</span>
+              <input
+                type="text"
+                {...register('payee')}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              />
+              {errors.payee ? <p className="text-xs text-rose-600">{errors.payee.message}</p> : null}
+            </label>
+          </>
+        ) : (
+          <>
+            <label className="block space-y-1 md:col-span-2">
+              <span className="text-sm font-medium text-slate-700">Description</span>
+              <textarea
+                rows={3}
+                {...register('description')}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              />
+              {errors.description ? (
+                <p className="text-xs text-rose-600">{errors.description.message}</p>
+              ) : null}
+            </label>
+
+            <label className="block space-y-1 md:col-span-2">
+              <span className="text-sm font-medium text-slate-700">
+                {selectedType === 'deposit' ? 'Reference Number (Optional)' : 'Reference (Optional)'}
+              </span>
+              <input
+                type="text"
+                {...register('referenceNumber')}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              />
+            </label>
+          </>
+        )}
+
+        {submitError ? <p className="text-sm text-rose-600 md:col-span-2">{submitError}</p> : null}
 
         <div className="md:col-span-2">
           <button

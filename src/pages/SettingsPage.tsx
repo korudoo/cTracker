@@ -166,7 +166,7 @@ export function SettingsPage() {
     }
 
     const rows = [
-      ['Due Date (AD)', 'Account', 'Type', 'Status', 'Amount', 'Cheque Number', 'Note'],
+      ['Due Date (AD)', 'Account', 'Type', 'Status', 'Amount', 'Cheque Number', 'Description'],
       ...transactions.map((transaction) => [
         transaction.dueDate,
         transaction.accountName,
@@ -174,7 +174,9 @@ export function SettingsPage() {
         transaction.status,
         transaction.amount.toFixed(2),
         transaction.chequeNumber ?? '',
-        transaction.note ?? '',
+        transaction.type === 'cheque'
+          ? transaction.payee ?? ''
+          : `${transaction.description ?? ''}${transaction.referenceNumber ? ` (Ref: ${transaction.referenceNumber})` : ''}`,
       ]),
     ];
 

@@ -50,6 +50,21 @@ export function TransactionsPage() {
     setError(null);
 
     try {
+      if (payload.type === 'cheque' && payload.chequeNumber) {
+        const normalizedChequeNumber = payload.chequeNumber.trim().toLowerCase();
+        const duplicateExists = transactions.some(
+          (transaction) =>
+            transaction.type === 'cheque' &&
+            transaction.accountId === payload.accountId &&
+            transaction.id !== (editing?.id ?? '') &&
+            (transaction.chequeNumber ?? '').trim().toLowerCase() === normalizedChequeNumber,
+        );
+
+        if (duplicateExists) {
+          throw new Error('Cheque number already exists for this account.');
+        }
+      }
+
       if (editing) {
         await updateTransaction(editing.id, payload);
       } else {

@@ -17,6 +17,16 @@ function formatCurrency(value: number) {
   });
 }
 
+function getDetails(transaction: Transaction): string {
+  if (transaction.type === 'cheque') {
+    return `Payee: ${transaction.payee ?? '-'} | Written: ${transaction.createdDate}`;
+  }
+
+  return `${transaction.description ?? '-'}${
+    transaction.referenceNumber ? ` | Ref: ${transaction.referenceNumber}` : ''
+  }`;
+}
+
 export function TransactionTable({
   transactions,
   calendarMode,
@@ -40,6 +50,7 @@ export function TransactionTable({
               <th className="py-2 pr-4 font-medium">Amount</th>
               <th className="py-2 pr-4 font-medium">Status</th>
               <th className="py-2 pr-4 font-medium">Cheque #</th>
+              <th className="py-2 pr-4 font-medium">Details</th>
               <th className="py-2 pr-4 font-medium">Actions</th>
             </tr>
           </thead>
@@ -63,6 +74,7 @@ export function TransactionTable({
                   <StatusBadge status={transaction.status} />
                 </td>
                 <td className="py-3 pr-4 text-slate-700">{transaction.chequeNumber ?? '—'}</td>
+                <td className="py-3 pr-4 text-xs text-slate-600">{getDetails(transaction)}</td>
                 <td className="py-3 pr-4">
                   <div className="flex gap-2">
                     <button

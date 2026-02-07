@@ -91,10 +91,33 @@ function normalizeTransactionInput(input: TransactionInput) {
     throw new Error('Amount must be greater than 0.');
   }
 
+  if (!input.dueDate) {
+    throw new Error('Due date is required.');
+  }
+
+  if (!input.createdDate) {
+    throw new Error('Created date is required.');
+  }
+
   const chequeNumber = input.type === 'cheque' ? input.chequeNumber?.trim() || null : null;
   if (input.type === 'cheque' && !chequeNumber) {
     throw new Error('Cheque number is required for cheque transactions.');
   }
+
+  const payee = input.type === 'cheque' ? input.payee?.trim() || null : null;
+  if (input.type === 'cheque' && !payee) {
+    throw new Error('Payee is required for cheque transactions.');
+  }
+
+  const description = input.type !== 'cheque' ? input.description?.trim() || null : null;
+  if (input.type !== 'cheque' && !description) {
+    throw new Error('Description is required for non-cheque transactions.');
+  }
+
+  const referenceNumber =
+    input.type === 'deposit' || input.type === 'withdrawal'
+      ? input.referenceNumber?.trim() || null
+      : null;
 
   return {
     account_id: input.accountId,
@@ -104,12 +127,9 @@ function normalizeTransactionInput(input: TransactionInput) {
     due_date: input.dueDate,
     created_date: input.createdDate,
     cheque_number: chequeNumber,
-    payee: input.type === 'cheque' ? input.payee?.trim() || null : null,
-    description: input.description?.trim() || null,
-    reference_number:
-      input.type === 'deposit' || input.type === 'withdrawal'
-        ? input.referenceNumber?.trim() || null
-        : null,
+    payee,
+    description,
+    reference_number: referenceNumber,
   };
 }
 
