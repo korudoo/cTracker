@@ -5,8 +5,8 @@ import {
   getBufferedDateRange,
   getDateProjectionDetail,
 } from '@/utils/balanceProjection';
-import { formatAdDate, formatMonthLabel, getMonthGrid, isSameDate, shiftMonth, toIsoDate } from '@/utils/date';
-import { adToBs } from '@/utils/nepaliDate';
+import { formatMonthLabel, getMonthGrid, isSameDate, shiftMonth, toIsoDate } from '@/utils/date';
+import { formatBsMonthYearFromAd, formatDualDate, getBsDatePartsFromAd } from '@/utils/nepaliDate';
 
 interface CalendarViewProps {
   mode: CalendarMode;
@@ -37,9 +37,8 @@ function buildMonthLabel(referenceDate: Date, mode: CalendarMode): string {
     return formatMonthLabel(referenceDate);
   }
 
-  const bs = adToBs(toIsoDate(referenceDate));
-  const [year, month] = bs.split('-');
-  return `BS ${year}-${month}`;
+  const bsMonthLabel = formatBsMonthYearFromAd(toIsoDate(referenceDate));
+  return bsMonthLabel || formatMonthLabel(referenceDate);
 }
 
 export function CalendarView({
@@ -168,7 +167,8 @@ export function CalendarView({
           const isToday = isSameDate(day, today);
           const isSelected = selectedDateIso === dayIso;
 
-          const bsDay = adToBs(dayIso).split('-')[2] ?? '';
+          const bsParts = getBsDatePartsFromAd(dayIso);
+          const bsDay = bsParts ? String(bsParts.day) : '';
 
           return (
             <button
@@ -220,7 +220,7 @@ export function CalendarView({
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">Date Details</h3>
-                <p className="text-sm text-slate-500">{formatAdDate(selectedDateIso)} (AD)</p>
+                <p className="text-sm text-slate-500">{formatDualDate(selectedDateIso)}</p>
               </div>
               <button
                 type="button"
