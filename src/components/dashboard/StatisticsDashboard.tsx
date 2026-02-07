@@ -45,7 +45,7 @@ function addDays(dateIso: string, days: number): string {
 function currency(value: number): string {
   return value.toLocaleString('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'NPR',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -54,7 +54,7 @@ function currency(value: number): string {
 function compactCurrency(value: number): string {
   return value.toLocaleString('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'NPR',
     notation: 'compact',
     maximumFractionDigits: 1,
   });

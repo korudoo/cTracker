@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarView } from '@/components/dashboard/CalendarView';
-import { StatisticsDashboard } from '@/components/dashboard/StatisticsDashboard';
-import { useCalendar } from '@/context/CalendarContext';
-import { calculateCurrentBalance } from '@/utils/balance';
-import { toIsoDate } from '@/utils/date';
+import { Link } from 'react-router-dom';
+import { StatsCards } from '@/components/dashboard/StatsCards';
+import { calculateCurrentBalance, calculatePendingTotals, calculateProjectedBalanceOnDate } from '@/utils/balance';
+import { calculateProjectedBalancesForRange } from '@/utils/balanceProjection';
+import { formatAdDate, toIsoDate } from '@/utils/date';
 import type { Account, Profile, Transaction } from '@/types/domain';
 import { getAccounts, getProfile, getTransactions, runDueStatusTransition } from '@/services/transactions';
 
@@ -22,39 +22,27 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-type RangeMode = 'currentMonth' | 'custom';
-
-interface DateRange {
-  startDate: string;
-  endDate: string;
+function addDays(dateIso: string, days: number): string {
+  const date = new Date(`${dateIso}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return toIsoDate(date);
 }
 
-function getCurrentMonthRange(referenceDate: Date = new Date()): DateRange {
-  const start = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
-  const end = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0);
-  return {
-    startDate: toIsoDate(start),
-    endDate: toIsoDate(end),
-  };
+function formatNpr(value: number): string {
+  return value.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'NPR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export function DashboardPage() {
-  const { mode } = useCalendar();
-  const initialRange = getCurrentMonthRange(new Date());
-
   const [profile, setProfile] = useState<Profile | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [statsTransactions, setStatsTransactions] = useState<Transaction[]>([]);
-  const [rangeMode, setRangeMode] = useState<RangeMode>('currentMonth');
-  const [customStartDate, setCustomStartDate] = useState(initialRange.startDate);
-  const [customEndDate, setCustomEndDate] = useState(initialRange.endDate);
-  const [appliedRange, setAppliedRange] = useState<DateRange>(initialRange);
-  const [monthDate, setMonthDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [loading, setLoading] = useState(true);
-  const [statsLoading, setStatsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statsError, setStatsError] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -65,20 +53,19 @@ export function DashboardPage() {
       try {
         await runDueStatusTransition(profileData.timezone);
       } catch (transitionError) {
-        // Keep dashboard usable even if RPC is missing or temporarily unavailable.
         console.warn(
           'Unable to run due status transition:',
           getErrorMessage(transitionError, 'Transition error'),
         );
       }
+
       const [accountsData, transactionData] = await Promise.all([getAccounts(), getTransactions()]);
 
       setProfile(profileData);
       setAccounts(accountsData);
       setTransactions(transactionData);
     } catch (loadError) {
-      const message = getErrorMessage(loadError, 'Unable to load dashboard.');
-      setError(message);
+      setError(getErrorMessage(loadError, 'Unable to load dashboard.'));
     } finally {
       setLoading(false);
     }
@@ -87,45 +74,6 @@ export function DashboardPage() {
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
-
-  useEffect(() => {
-    if (rangeMode === 'currentMonth') {
-      setAppliedRange(getCurrentMonthRange(new Date()));
-      return;
-    }
-
-    if (customStartDate && customEndDate && customStartDate <= customEndDate) {
-      setAppliedRange({
-        startDate: customStartDate,
-        endDate: customEndDate,
-      });
-    }
-  }, [customEndDate, customStartDate, rangeMode]);
-
-  const loadStatsTransactions = useCallback(async (range: DateRange) => {
-    setStatsLoading(true);
-    setStatsError(null);
-
-    try {
-      const data = await getTransactions({
-        dateField: 'dueDate',
-        dateFrom: range.startDate,
-        dateTo: range.endDate,
-        sortBy: 'date',
-        sortDirection: 'asc',
-      });
-      setStatsTransactions(data);
-    } catch (statsLoadError) {
-      setStatsTransactions([]);
-      setStatsError(getErrorMessage(statsLoadError, 'Unable to load dashboard statistics.'));
-    } finally {
-      setStatsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadStatsTransactions(appliedRange);
-  }, [appliedRange, loadStatsTransactions]);
 
   useEffect(() => {
     if (!profile?.notificationsEnabled || typeof Notification === 'undefined') {
@@ -152,6 +100,49 @@ export function DashboardPage() {
     [openingBalance, transactions],
   );
 
+  const todayIso = toIsoDate(new Date());
+  const projectedToday = useMemo(
+    () => calculateProjectedBalanceOnDate(currentBalance, transactions, todayIso),
+    [currentBalance, todayIso, transactions],
+  );
+
+  const { pendingDeposits, pendingOutflows } = useMemo(
+    () => calculatePendingTotals(transactions),
+    [transactions],
+  );
+
+  const keyTotals = useMemo(() => {
+    const totalCheques = transactions
+      .filter((transaction) => transaction.type === 'cheque')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+    const totalDeposits = transactions
+      .filter((transaction) => transaction.type === 'deposit')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+    const totalWithdrawals = transactions
+      .filter((transaction) => transaction.type === 'withdrawal')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+    return [
+      { label: 'Total Cheques', value: formatNpr(totalCheques), tone: 'text-rose-700' },
+      { label: 'Total Deposits', value: formatNpr(totalDeposits), tone: 'text-emerald-700' },
+      { label: 'Total Withdrawals', value: formatNpr(totalWithdrawals), tone: 'text-rose-700' },
+    ];
+  }, [transactions]);
+
+  const nextSevenDays = useMemo(() => {
+    const endDate = addDays(todayIso, 6);
+    const projection = calculateProjectedBalancesForRange({
+      currentBalance,
+      transactions,
+      startDate: todayIso,
+      endDate,
+    });
+
+    return projection.days;
+  }, [currentBalance, todayIso, transactions]);
+
   if (loading) {
     return <div className="rounded-xl bg-white p-6 shadow-card">Loading dashboard...</div>;
   }
@@ -173,29 +164,78 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <StatisticsDashboard
+      <StatsCards
         currentBalance={currentBalance}
-        allTransactions={transactions}
-        rangeTransactions={statsTransactions}
-        rangeMode={rangeMode}
-        rangeStartDate={appliedRange.startDate}
-        rangeEndDate={appliedRange.endDate}
-        customStartDate={customStartDate}
-        customEndDate={customEndDate}
-        loading={statsLoading}
-        error={statsError}
-        onRangeModeChange={setRangeMode}
-        onCustomStartDateChange={setCustomStartDate}
-        onCustomEndDateChange={setCustomEndDate}
+        projectedToday={projectedToday}
+        pendingDeposits={pendingDeposits}
+        pendingOutflows={pendingOutflows}
       />
 
-      <CalendarView
-        mode={mode}
-        currentBalance={currentBalance}
-        monthDate={monthDate}
-        transactions={transactions}
-        onMonthDateChange={setMonthDate}
-      />
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
+        <h2 className="text-lg font-semibold text-slate-900">Quick Actions</h2>
+        <p className="mt-1 text-sm text-slate-500">Jump to common tasks without opening full filters.</p>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            to="/transactions"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            Add Transaction
+          </Link>
+          <Link
+            to="/calendar"
+            className="rounded-lg border border-brand-300 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+          >
+            View Calendar
+          </Link>
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        {keyTotals.map((item) => (
+          <article key={item.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
+            <p className="text-xs uppercase tracking-wide text-slate-500">{item.label}</p>
+            <p className={`mt-2 text-lg font-semibold ${item.tone}`}>{item.value}</p>
+          </article>
+        ))}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
+        <h2 className="text-lg font-semibold text-slate-900">Next 7 Days Cashflow</h2>
+        <p className="mt-1 text-sm text-slate-500">Projected balance at day-end for upcoming dates.</p>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200 text-sm">
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="py-2 pr-4 font-medium">Date</th>
+                <th className="py-2 pr-4 font-medium">Deposits</th>
+                <th className="py-2 pr-4 font-medium">Deductions</th>
+                <th className="py-2 pr-4 font-medium">Projected Balance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {nextSevenDays.map((day) => {
+                const deductions = day.dayTotals.cheques + day.dayTotals.withdrawals;
+                return (
+                  <tr key={day.date}>
+                    <td className="py-2 pr-4 text-slate-700">{formatAdDate(day.date)}</td>
+                    <td className="py-2 pr-4 text-emerald-700">{formatNpr(day.dayTotals.deposits)}</td>
+                    <td className="py-2 pr-4 text-rose-700">{formatNpr(deductions)}</td>
+                    <td
+                      className={`py-2 pr-4 font-semibold ${
+                        day.projectedBalance >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                      }`}
+                    >
+                      {formatNpr(day.projectedBalance)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }

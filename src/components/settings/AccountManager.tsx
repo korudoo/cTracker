@@ -50,7 +50,8 @@ export function AccountManager({ accounts, isSaving, onCreateAccount }: AccountM
               ) : null}
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Opening: ${account.openingBalance.toFixed(2)} | Current: ${account.currentBalance.toFixed(2)}
+              Opening: NPR {account.openingBalance.toFixed(2)} | Current: NPR{' '}
+              {account.currentBalance.toFixed(2)}
             </p>
           </li>
         ))}

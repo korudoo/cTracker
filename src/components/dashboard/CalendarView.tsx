@@ -19,7 +19,7 @@ interface CalendarViewProps {
 function currencyShort(value: number): string {
   return value.toLocaleString('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'NPR',
     maximumFractionDigits: 0,
   });
 }
@@ -27,7 +27,7 @@ function currencyShort(value: number): string {
 function currency(value: number): string {
   return value.toLocaleString('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'NPR',
     minimumFractionDigits: 2,
   });
 }

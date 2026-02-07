@@ -5,7 +5,8 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard' },
-  { label: 'Alerts', to: '/notifications' },
+  { label: 'Calendar', to: '/calendar' },
   { label: 'Transactions', to: '/transactions' },
+  { label: 'Alerts', to: '/notifications' },
   { label: 'Settings', to: '/settings' },
 ];

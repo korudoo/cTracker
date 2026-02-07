@@ -8,7 +8,7 @@ interface StatsCardsProps {
 function currency(value: number) {
   return value.toLocaleString('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'NPR',
     minimumFractionDigits: 2,
   });
 }

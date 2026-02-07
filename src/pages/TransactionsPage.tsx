@@ -1,5 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AdvancedFiltersPanel } from '@/components/transactions/AdvancedFiltersPanel';
+import { QuickRangeDropdown } from '@/components/transactions/QuickRangeDropdown';
 import { TransactionForm } from '@/components/transactions/TransactionForm';
 import { TransactionTable } from '@/components/transactions/TransactionTable';
 import { useCalendar } from '@/context/CalendarContext';
@@ -7,53 +10,21 @@ import {
   chequeNumberExistsInAccount,
   createTransaction,
   deleteTransaction,
-  type DateFieldMode,
   getAccounts,
   type GetTransactionsParams,
   getProfile,
   getTransactions,
-  type SortDirection,
-  type TransactionSortField,
   runDueStatusTransition,
   updateTransaction,
 } from '@/services/transactions';
-import type {
-  Transaction,
-  TransactionInput,
-  TransactionStatus,
-  TransactionType,
-} from '@/types/domain';
+import type { Transaction, TransactionInput } from '@/types/domain';
+import {
+  DEFAULT_TRANSACTION_FILTERS,
+  type TransactionFilters,
+} from '@/types/transactionFilters';
 import { toIsoDate } from '@/utils/date';
-
-interface TransactionFilters {
-  type: TransactionType | 'all';
-  status: TransactionStatus | 'all';
-  searchText: string;
-  dateField: DateFieldMode;
-  dateFrom: string;
-  dateTo: string;
-  amountMin: string;
-  amountMax: string;
-  sortBy: TransactionSortField;
-  sortDirection: SortDirection;
-  dateSortField: DateFieldMode;
-  showHistorical: boolean;
-}
-
-const DEFAULT_FILTERS: TransactionFilters = {
-  type: 'all',
-  status: 'all',
-  searchText: '',
-  dateField: 'dueDate',
-  dateFrom: '',
-  dateTo: '',
-  amountMin: '',
-  amountMax: '',
-  sortBy: 'date',
-  sortDirection: 'asc',
-  dateSortField: 'dueDate',
-  showHistorical: false,
-};
+import { getQuickRangeDates, type QuickRangeValue } from '@/utils/quickRanges';
+import { saveTransactionFiltersSnapshot } from '@/utils/transactionFiltersSnapshot';
 
 function parseNumberInput(value: string): number | undefined {
   const trimmed = value.trim();
@@ -76,9 +47,33 @@ function getErrorMessage(error: unknown, fallback: string): string {
 export function TransactionsPage() {
   const { mode } = useCalendar();
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_TRANSACTION_FILTERS);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [quickRange, setQuickRange] = useState<QuickRangeValue>('');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const dateFromInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!controlsRef.current) {
+        return;
+      }
+
+      if (!controlsRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isMenuOpen]);
 
   const profileQuery = useQuery({
     queryKey: ['profile'],
@@ -87,7 +82,14 @@ export function TransactionsPage() {
 
   const transitionQuery = useQuery({
     queryKey: ['due-status-transition', profileQuery.data?.timezone],
-    queryFn: async () => runDueStatusTransition(profileQuery.data?.timezone ?? 'UTC'),
+    queryFn: async () => {
+      const timezone = profileQuery.data?.timezone ?? 'UTC';
+      await runDueStatusTransition(timezone);
+      return {
+        timezone,
+        processedAt: new Date().toISOString(),
+      };
+    },
     enabled: Boolean(profileQuery.data?.timezone),
     staleTime: Number.POSITIVE_INFINITY,
   });
@@ -213,14 +215,19 @@ export function TransactionsPage() {
     if (filters.amountMin || filters.amountMax) {
       summary.push(`Amount: ${filters.amountMin || 'min'} to ${filters.amountMax || 'max'}`);
     }
-    if (filters.sortBy !== DEFAULT_FILTERS.sortBy || filters.sortDirection !== DEFAULT_FILTERS.sortDirection) {
+    if (
+      filters.sortBy !== DEFAULT_TRANSACTION_FILTERS.sortBy ||
+      filters.sortDirection !== DEFAULT_TRANSACTION_FILTERS.sortDirection
+    ) {
       summary.push(`Sort: ${filters.sortBy} (${filters.sortDirection})`);
     }
     if (
       filters.sortBy === 'date' &&
-      filters.dateSortField !== DEFAULT_FILTERS.dateSortField
+      filters.dateSortField !== DEFAULT_TRANSACTION_FILTERS.dateSortField
     ) {
-      summary.push(`Date sort field: ${filters.dateSortField === 'createdDate' ? 'created date' : 'due date'}`);
+      summary.push(
+        `Date sort field: ${filters.dateSortField === 'createdDate' ? 'created date' : 'due date'}`,
+      );
     }
     if (!filters.showHistorical && historicalCutoffDate) {
       summary.push(`Historical hidden: cleared before ${historicalCutoffDate}`);
@@ -228,6 +235,14 @@ export function TransactionsPage() {
 
     return summary;
   }, [filters, historicalCutoffDate]);
+
+  useEffect(() => {
+    saveTransactionFiltersSnapshot({
+      params: transactionParams,
+      summary: appliedSummary,
+      createdAt: new Date().toISOString(),
+    });
+  }, [appliedSummary, transactionParams]);
 
   const isLoadingInitial =
     profileQuery.isPending ||
@@ -251,6 +266,36 @@ export function TransactionsPage() {
     setFilters((previous) => ({ ...previous, [key]: value }));
   };
 
+  const clearAllFilters = () => {
+    setFilters(DEFAULT_TRANSACTION_FILTERS);
+    setQuickRange('');
+  };
+
+  const handleQuickRangeChange = (value: QuickRangeValue) => {
+    setQuickRange(value);
+
+    if (!value) {
+      return;
+    }
+
+    if (value === 'custom') {
+      setIsAdvancedOpen(true);
+      setIsMenuOpen(false);
+      window.setTimeout(() => {
+        dateFromInputRef.current?.focus();
+      }, 0);
+      return;
+    }
+
+    const range = getQuickRangeDates(value);
+    setFilters((previous) => ({
+      ...previous,
+      dateField: 'dueDate',
+      dateFrom: range.startDate,
+      dateTo: range.endDate,
+    }));
+  };
+
   const handleSave = async (payload: TransactionInput) => {
     setActionError(null);
     await saveMutation.mutateAsync(payload);
@@ -258,7 +303,9 @@ export function TransactionsPage() {
 
   const handleDelete = async (transaction: Transaction) => {
     const approved = window.confirm(`Delete transaction for ${transaction.type} (${transaction.amount})?`);
-    if (!approved) return;
+    if (!approved) {
+      return;
+    }
 
     setActionError(null);
     await deleteMutation.mutateAsync(transaction.id);
@@ -286,167 +333,73 @@ export function TransactionsPage() {
       />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Transaction List Controls</h2>
-            <p className="text-sm text-slate-500">Combine filters and sorting; all filtering is server-side.</p>
+        <div className="relative" ref={controlsRef}>
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            <label className="block min-w-[15rem] flex-1 space-y-1">
+              <span className="text-sm font-medium text-slate-700">Search</span>
+              <input
+                type="text"
+                value={filters.searchText}
+                onChange={(event) => updateFilter('searchText', event.target.value)}
+                placeholder="Search by payee or description"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              />
+            </label>
+
+            <QuickRangeDropdown value={quickRange} onChange={handleQuickRangeChange} />
+
+            <Link
+              to="/settings/export?scope=filtered"
+              className="rounded-lg border border-brand-300 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"
+            >
+              Export Filtered
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen((previous) => !previous)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              aria-haspopup="menu"
+              aria-expanded={isMenuOpen}
+            >
+              Filters
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setFilters(DEFAULT_FILTERS)}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            Clear All
-          </button>
-        </div>
 
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Type</span>
-            <select
-              value={filters.type}
-              onChange={(event) => updateFilter('type', event.target.value as TransactionType | 'all')}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            >
-              <option value="all">All</option>
-              <option value="cheque">Cheque</option>
-              <option value="deposit">Deposit</option>
-              <option value="withdrawal">Withdrawal</option>
-            </select>
-          </label>
+          {isMenuOpen ? (
+            <div className="absolute right-0 top-full z-20 mt-1 w-60 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAdvancedOpen(true);
+                  setIsMenuOpen(false);
+                }}
+                className="block w-full rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+              >
+                Advanced Filters & Sorting
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearAllFilters();
+                  setIsMenuOpen(false);
+                }}
+                className="block w-full rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+              >
+                Clear all filters
+              </button>
+            </div>
+          ) : null}
 
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Status</span>
-            <select
-              value={filters.status}
-              onChange={(event) =>
-                updateFilter('status', event.target.value as TransactionStatus | 'all')
-              }
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            >
-              <option value="all">All</option>
-              <option value="pending">Pending</option>
-              <option value="deducted">Deducted</option>
-              <option value="cleared">Cleared</option>
-            </select>
-          </label>
-
-          <label className="block space-y-1 lg:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Payee / Description</span>
-            <input
-              type="text"
-              value={filters.searchText}
-              onChange={(event) => updateFilter('searchText', event.target.value)}
-              placeholder="Search by payee or description"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            />
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Date Filter Field</span>
-            <select
-              value={filters.dateField}
-              onChange={(event) => updateFilter('dateField', event.target.value as DateFieldMode)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            >
-              <option value="dueDate">Due Date</option>
-              <option value="createdDate">Created Date</option>
-            </select>
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Date From</span>
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(event) => updateFilter('dateFrom', event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            />
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Date To</span>
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={(event) => updateFilter('dateTo', event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            />
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Amount Min</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={filters.amountMin}
-              onChange={(event) => updateFilter('amountMin', event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            />
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Sort By</span>
-            <select
-              value={filters.sortBy}
-              onChange={(event) => updateFilter('sortBy', event.target.value as TransactionSortField)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            >
-              <option value="date">Date</option>
-              <option value="amount">Amount</option>
-              <option value="status">Status</option>
-              <option value="type">Type</option>
-            </select>
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Date Sort Field</span>
-            <select
-              value={filters.dateSortField}
-              onChange={(event) => updateFilter('dateSortField', event.target.value as DateFieldMode)}
-              disabled={filters.sortBy !== 'date'}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:bg-slate-100"
-            >
-              <option value="dueDate">Due Date</option>
-              <option value="createdDate">Created Date</option>
-            </select>
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Sort Direction</span>
-            <select
-              value={filters.sortDirection}
-              onChange={(event) => updateFilter('sortDirection', event.target.value as SortDirection)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-slate-700">Amount Max</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={filters.amountMax}
-              onChange={(event) => updateFilter('amountMax', event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            />
-          </label>
-        </div>
-
-        <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={filters.showHistorical}
-            onChange={(event) => updateFilter('showHistorical', event.target.checked)}
-            className="h-4 w-4 rounded border-slate-300"
+          <AdvancedFiltersPanel
+            open={isAdvancedOpen}
+            filters={filters}
+            onClose={() => setIsAdvancedOpen(false)}
+            onClearAll={clearAllFilters}
+            onUpdateFilter={updateFilter}
+            dateFromInputRef={dateFromInputRef}
           />
-          Show historical cleared transactions older than 60 days
-        </label>
+        </div>
 
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-sm font-medium text-slate-700">Applied filters summary</p>

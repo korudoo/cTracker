@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { AccountManager } from '@/components/settings/AccountManager';
 import { useCalendar } from '@/context/CalendarContext';
 import {
@@ -10,17 +11,14 @@ import {
   createAccount,
   getAccounts,
   getProfile,
-  getTransactions,
   runDueStatusTransition,
   updateProfile,
 } from '@/services/transactions';
-import type { Account, NotificationSettings, Transaction } from '@/types/domain';
-import { downloadCsv, toCsv } from '@/utils/csv';
+import type { Account, NotificationSettings } from '@/types/domain';
 
 export function SettingsPage() {
   const { mode, setMode } = useCalendar();
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
@@ -45,14 +43,12 @@ export function SettingsPage() {
 
     try {
       const profileData = await getProfile();
-      const [accountsData, transactionData, userNotificationSettings] = await Promise.all([
+      const [accountsData, userNotificationSettings] = await Promise.all([
         getAccounts(),
-        getTransactions(),
         getNotificationSettings(),
       ]);
 
       setAccounts(accountsData);
-      setTransactions(transactionData);
       setNotificationsEnabled(profileData.notificationsEnabled);
       setTimezone(profileData.timezone);
       setCalendarPreference(profileData.calendarPreference);
@@ -214,46 +210,12 @@ export function SettingsPage() {
     }
   };
 
-  const handleExport = () => {
-    if (!transactions.length) {
-      setMessage('No transactions available to export.');
-      return;
-    }
-
-    const rows = [
-      ['Due Date (AD)', 'Account', 'Type', 'Status', 'Amount', 'Cheque Number', 'Description'],
-      ...transactions.map((transaction) => [
-        transaction.dueDate,
-        transaction.accountName,
-        transaction.type,
-        transaction.status,
-        transaction.amount.toFixed(2),
-        transaction.chequeNumber ?? '',
-        transaction.type === 'cheque'
-          ? transaction.payee ?? ''
-          : `${transaction.description ?? ''}${transaction.referenceNumber ? ` (Ref: ${transaction.referenceNumber})` : ''}`,
-      ]),
-    ];
-
-    const csv = toCsv(rows);
-    const now = new Date();
-    const filename = `cheque-tracker-export-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
-      2,
-      '0',
-    )}-${String(now.getDate()).padStart(2, '0')}.csv`;
-
-    downloadCsv(filename, csv);
-    setMessage('CSV exported.');
-  };
-
   const handleManualTransition = async () => {
     setError(null);
     setMessage(null);
 
     try {
       await runDueStatusTransition(timezone);
-      const latestTransactions = await getTransactions();
-      setTransactions(latestTransactions);
       setMessage('Status transition completed for today.');
     } catch (transitionError) {
       const nextError =
@@ -318,13 +280,12 @@ export function SettingsPage() {
             >
               {savingProfile ? 'Saving...' : 'Save Settings'}
             </button>
-            <button
-              type="button"
-              onClick={handleExport}
+            <Link
+              to="/settings/export"
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
             >
-              Export CSV
-            </button>
+              Export & Backup
+            </Link>
             <button
               type="button"
               onClick={() => void handleManualTransition()}
@@ -543,8 +504,9 @@ export function SettingsPage() {
 
               {selectedAccount ? (
                 <p className="text-sm text-slate-600">
-                  Current opening: <span className="font-semibold">${selectedAccount.openingBalance.toFixed(2)}</span>{' '}
-                  | Current balance: <span className="font-semibold">${selectedAccount.currentBalance.toFixed(2)}</span>
+                  Current opening:{' '}
+                  <span className="font-semibold">NPR {selectedAccount.openingBalance.toFixed(2)}</span> | Current
+                  balance: <span className="font-semibold">NPR {selectedAccount.currentBalance.toFixed(2)}</span>
                 </p>
               ) : null}
 

@@ -503,6 +503,69 @@ export async function getTransactions(params: GetTransactionsParams = {}): Promi
 
 export const getTransactionsWithFilters = getTransactions;
 
+export async function countTransactions(params: GetTransactionsParams = {}): Promise<number> {
+  const {
+    type = 'all',
+    status = 'all',
+    searchText = '',
+    dateField = 'dueDate',
+    dateFrom,
+    dateTo,
+    amountMin,
+    amountMax,
+    hideHistoricalCleared = false,
+    historicalCutoffDate,
+  } = params;
+
+  let query = supabase.from('transactions').select('id', { count: 'exact', head: true });
+
+  if (type !== 'all') {
+    query = query.eq('type', type);
+  }
+
+  if (status !== 'all') {
+    query = query.eq('status', status);
+  }
+
+  const trimmedText = searchText.trim();
+  if (trimmedText) {
+    const escaped = trimmedText.replace(/[%_,]/g, (match) => `\\${match}`);
+    query = query.or(`payee.ilike.%${escaped}%,description.ilike.%${escaped}%`);
+  }
+
+  const dateColumn = mapDateField(dateField);
+
+  if (dateFrom) {
+    query = query.gte(dateColumn, dateFrom);
+  }
+
+  if (dateTo) {
+    query = query.lte(dateColumn, dateTo);
+  }
+
+  if (typeof amountMin === 'number' && Number.isFinite(amountMin)) {
+    query = query.gte('amount', amountMin);
+  }
+
+  if (typeof amountMax === 'number' && Number.isFinite(amountMax)) {
+    query = query.lte('amount', amountMax);
+  }
+
+  if (hideHistoricalCleared && historicalCutoffDate) {
+    query = query.or(
+      `status.neq.cleared,and(status.eq.cleared,due_date.gte.${historicalCutoffDate})`,
+    );
+  }
+
+  const { count, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return count ?? 0;
+}
+
 export async function chequeNumberExistsForAccount(options: {
   accountId: string;
   chequeNumber: string;
