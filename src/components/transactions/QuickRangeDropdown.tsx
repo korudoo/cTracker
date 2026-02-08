@@ -18,6 +18,7 @@ export function QuickRangeDropdown({ value, onChange }: QuickRangeDropdownProps)
         <option value="">Select quick range</option>
         <option value="lastWeek">Last week</option>
         <option value="lastMonth">Last month</option>
+        <option value="thisMonth">This month</option>
         <option value="nextWeek">Next week</option>
         <option value="nextMonth">Next month</option>
         <option value="custom">Custom</option>
@@ -25,4 +26,3 @@ export function QuickRangeDropdown({ value, onChange }: QuickRangeDropdownProps)
     </label>
   );
 }
-

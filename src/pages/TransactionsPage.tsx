@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdvancedFiltersPanel } from '@/components/transactions/AdvancedFiltersPanel';
 import { QuickRangeDropdown } from '@/components/transactions/QuickRangeDropdown';
@@ -51,29 +50,9 @@ export function TransactionsPage() {
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [quickRange, setQuickRange] = useState<QuickRangeValue>('');
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
-  const controlsRef = useRef<HTMLDivElement>(null);
   const dateFromInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!isMenuOpen) {
-      return;
-    }
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!controlsRef.current) {
-        return;
-      }
-
-      if (!controlsRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isMenuOpen]);
+  const advancedPanelId = 'transactions-advanced-filters-panel';
 
   const profileQuery = useQuery({
     queryKey: ['profile'],
@@ -280,7 +259,6 @@ export function TransactionsPage() {
 
     if (value === 'custom') {
       setIsAdvancedOpen(true);
-      setIsMenuOpen(false);
       window.setTimeout(() => {
         dateFromInputRef.current?.focus();
       }, 0);
@@ -333,73 +311,48 @@ export function TransactionsPage() {
       />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
-        <div className="relative" ref={controlsRef}>
-          <div className="mb-4 flex flex-wrap items-end gap-3">
-            <label className="block min-w-[15rem] flex-1 space-y-1">
-              <span className="text-sm font-medium text-slate-700">Search</span>
-              <input
-                type="text"
-                value={filters.searchText}
-                onChange={(event) => updateFilter('searchText', event.target.value)}
-                placeholder="Search by payee or description"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-              />
-            </label>
+        <div className="mb-4 flex flex-wrap items-end gap-3">
+          <label className="block min-w-[15rem] flex-1 space-y-1">
+            <span className="text-sm font-medium text-slate-700">Search</span>
+            <input
+              type="text"
+              value={filters.searchText}
+              onChange={(event) => updateFilter('searchText', event.target.value)}
+              placeholder="Search by payee or description"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+            />
+          </label>
 
-            <QuickRangeDropdown value={quickRange} onChange={handleQuickRangeChange} />
+          <QuickRangeDropdown value={quickRange} onChange={handleQuickRangeChange} />
 
-            <Link
-              to="/settings/export?scope=filtered"
-              className="rounded-lg border border-brand-300 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"
-            >
-              Export Filtered
-            </Link>
+          <button
+            type="button"
+            onClick={() => setIsAdvancedOpen((previous) => !previous)}
+            aria-expanded={isAdvancedOpen}
+            aria-controls={advancedPanelId}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            {isAdvancedOpen ? 'Hide advanced' : 'Show advanced'}
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen((previous) => !previous)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-              aria-haspopup="menu"
-              aria-expanded={isMenuOpen}
-            >
-              Filters
-            </button>
-          </div>
-
-          {isMenuOpen ? (
-            <div className="absolute right-0 top-full z-20 mt-1 w-60 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAdvancedOpen(true);
-                  setIsMenuOpen(false);
-                }}
-                className="block w-full rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
-              >
-                Advanced Filters & Sorting
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  clearAllFilters();
-                  setIsMenuOpen(false);
-                }}
-                className="block w-full rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
-              >
-                Clear all filters
-              </button>
-            </div>
-          ) : null}
-
-          <AdvancedFiltersPanel
-            open={isAdvancedOpen}
-            filters={filters}
-            onClose={() => setIsAdvancedOpen(false)}
-            onClearAll={clearAllFilters}
-            onUpdateFilter={updateFilter}
-            dateFromInputRef={dateFromInputRef}
-          />
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="rounded-lg border border-transparent px-2 py-2 text-sm font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
+          >
+            Clear all filters
+          </button>
         </div>
+
+        <AdvancedFiltersPanel
+          panelId={advancedPanelId}
+          open={isAdvancedOpen}
+          filters={filters}
+          onClose={() => setIsAdvancedOpen(false)}
+          onClearAll={clearAllFilters}
+          onUpdateFilter={updateFilter}
+          dateFromInputRef={dateFromInputRef}
+        />
 
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-sm font-medium text-slate-700">Applied filters summary</p>

@@ -4,6 +4,7 @@ import type { TransactionStatus, TransactionType } from '@/types/domain';
 import type { TransactionFilters } from '@/types/transactionFilters';
 
 interface AdvancedFiltersPanelProps {
+  panelId: string;
   open: boolean;
   filters: TransactionFilters;
   onClose: () => void;
@@ -13,6 +14,7 @@ interface AdvancedFiltersPanelProps {
 }
 
 export function AdvancedFiltersPanel({
+  panelId,
   open,
   filters,
   onClose,
@@ -25,49 +27,46 @@ export function AdvancedFiltersPanel({
   }
 
   return (
-    <>
-      <button
-        type="button"
-        aria-label="Close advanced filters"
-        onClick={onClose}
-        className="fixed inset-0 z-40 bg-slate-900/40 md:hidden"
-      />
-
-      <section className="fixed inset-x-0 bottom-0 z-50 max-h-[88vh] overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-4 shadow-2xl md:absolute md:right-0 md:top-full md:z-30 md:mt-2 md:max-h-[75vh] md:w-[54rem] md:rounded-xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">Advanced Filters & Sorting</h3>
-            <p className="text-sm text-slate-500">Server-side filters are applied immediately.</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClearAll}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
-            >
-              Clear all
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-brand-300 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
-            >
-              Done
-            </button>
-          </div>
+    <section
+      id={panelId}
+      role="region"
+      aria-label="Advanced filters and sorting"
+      className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
+    >
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">Advanced Filters & Sorting</h3>
+          <p className="text-sm text-slate-500">Server-side filters are applied immediately.</p>
         </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white"
+          >
+            Clear all
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-brand-300 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+          >
+            Hide advanced
+          </button>
+        </div>
+      </div>
 
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <label className="block space-y-1 lg:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Payee / Description</span>
-            <input
-              type="text"
-              value={filters.searchText}
-              onChange={(event) => onUpdateFilter('searchText', event.target.value)}
-              placeholder="Search by payee or description"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            />
-          </label>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <label className="block space-y-1 lg:col-span-2">
+          <span className="text-sm font-medium text-slate-700">Payee / Description</span>
+          <input
+            type="text"
+            value={filters.searchText}
+            onChange={(event) => onUpdateFilter('searchText', event.target.value)}
+            placeholder="Search by payee or description"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+          />
+        </label>
 
           <label className="block space-y-1">
             <span className="text-sm font-medium text-slate-700">Type</span>
@@ -194,19 +193,17 @@ export function AdvancedFiltersPanel({
               <option value="desc">Descending</option>
             </select>
           </label>
-        </div>
+      </div>
 
-        <label className="mt-4 flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={filters.showHistorical}
-            onChange={(event) => onUpdateFilter('showHistorical', event.target.checked)}
-            className="h-4 w-4 rounded border-slate-300"
-          />
-          Show historical cleared transactions older than 60 days
-        </label>
-      </section>
-    </>
+      <label className="mt-4 flex items-center gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          checked={filters.showHistorical}
+          onChange={(event) => onUpdateFilter('showHistorical', event.target.checked)}
+          className="h-4 w-4 rounded border-slate-300"
+        />
+        Show historical cleared transactions older than 60 days
+      </label>
+    </section>
   );
 }
-

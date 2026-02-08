@@ -1,6 +1,13 @@
 const KATHMANDU_TIME_ZONE = 'Asia/Kathmandu';
 
-export type QuickRangeValue = '' | 'lastWeek' | 'lastMonth' | 'nextWeek' | 'nextMonth' | 'custom';
+export type QuickRangeValue =
+  | ''
+  | 'lastWeek'
+  | 'lastMonth'
+  | 'thisMonth'
+  | 'nextWeek'
+  | 'nextMonth'
+  | 'custom';
 
 interface KathmanduDateParts {
   year: number;
@@ -51,6 +58,7 @@ export function getQuickRangeDates(
   referenceDate: Date = new Date(),
 ): QuickRangeDates {
   const todayIso = getKathmanduTodayIso(referenceDate);
+  const todayParts = getKathmanduDateParts(referenceDate);
 
   switch (quickRange) {
     case 'lastWeek':
@@ -63,6 +71,24 @@ export function getQuickRangeDates(
         startDate: addDaysToIsoDate(todayIso, -30),
         endDate: todayIso,
       };
+    case 'thisMonth': {
+      const monthStart = formatIsoDate({
+        year: todayParts.year,
+        month: todayParts.month,
+        day: 1,
+      });
+
+      const nextMonthStart = formatIsoDate({
+        year: todayParts.month === 12 ? todayParts.year + 1 : todayParts.year,
+        month: todayParts.month === 12 ? 1 : todayParts.month + 1,
+        day: 1,
+      });
+
+      return {
+        startDate: monthStart,
+        endDate: addDaysToIsoDate(nextMonthStart, -1),
+      };
+    }
     case 'nextWeek':
       return {
         startDate: todayIso,
@@ -75,4 +101,3 @@ export function getQuickRangeDates(
       };
   }
 }
-
