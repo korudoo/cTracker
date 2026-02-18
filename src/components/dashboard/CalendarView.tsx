@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { CalendarMode, Transaction } from '@/types/domain';
 import {
   calculateProjectedBalancesForRange,
+  computeClearedBalancesByDate,
   getBufferedDateRange,
   getDateProjectionDetail,
 } from '@/utils/balanceProjection';
@@ -20,11 +21,12 @@ import {
 import { getChequeTextColor } from '@/utils/calendarMetricColor';
 import { getTransactionStatusLabel } from '@/utils/transactionStatus';
 
-export type CalendarMetric = 'projectedBalance' | 'totalCheques';
+export type CalendarMetric = 'projectedBalance' | 'totalCheques' | 'clearedBalance';
 
 interface CalendarViewProps {
   mode: CalendarMode;
   metric: CalendarMetric;
+  openingBalance: number;
   currentBalance: number;
   monthDate: Date;
   transactions: Transaction[];
@@ -199,6 +201,7 @@ function getTodayMonthStartForMode(mode: CalendarMode, today: Date): Date {
 export function CalendarView({
   mode,
   metric,
+  openingBalance,
   currentBalance,
   monthDate,
   transactions,
@@ -230,28 +233,39 @@ export function CalendarView({
     return totals;
   }, [transactions]);
 
-  const projection = useMemo(() => {
+  const projectionRange = useMemo(() => {
     const firstCellIso = gridData.cells[0]?.adDateIso;
     const lastCellIso = gridData.cells[gridData.cells.length - 1]?.adDateIso;
 
     if (!firstCellIso || !lastCellIso) {
-      return calculateProjectedBalancesForRange({
-        currentBalance,
-        transactions,
+      return {
         startDate: todayIso,
         endDate: todayIso,
-      });
+      };
     }
 
-    const range = getBufferedDateRange(firstCellIso, lastCellIso, 3, 3);
+    return getBufferedDateRange(firstCellIso, lastCellIso, 3, 3);
+  }, [gridData.cells, todayIso]);
 
+  const projection = useMemo(() => {
     return calculateProjectedBalancesForRange({
       currentBalance,
       transactions,
-      startDate: range.startDate,
-      endDate: range.endDate,
+      startDate: projectionRange.startDate,
+      endDate: projectionRange.endDate,
     });
-  }, [currentBalance, gridData.cells, todayIso, transactions]);
+  }, [currentBalance, projectionRange.endDate, projectionRange.startDate, transactions]);
+
+  const clearedBalanceByDate = useMemo(
+    () =>
+      computeClearedBalancesByDate(
+        projectionRange.startDate,
+        projectionRange.endDate,
+        openingBalance,
+        transactions,
+      ),
+    [openingBalance, projectionRange.endDate, projectionRange.startDate, transactions],
+  );
 
   const projectionByDate = projection.byDate;
 
@@ -289,6 +303,9 @@ export function CalendarView({
   }, [projection, selectedDateIso]);
 
   const selectedDateProjectedBalance = selectedProjection?.projectedBalance ?? currentBalance;
+  const selectedDateClearedBalance = selectedDateIso
+    ? (clearedBalanceByDate[selectedDateIso] ?? openingBalance)
+    : openingBalance;
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
@@ -298,7 +315,9 @@ export function CalendarView({
           <p className="text-sm text-slate-500">
             {metric === 'projectedBalance'
               ? 'Projection rule: current + deposits - cheques - withdrawals (up to selected date).'
-              : 'Total Cheques view: sum of cheque amounts due on each date regardless of status.'}
+              : metric === 'totalCheques'
+                ? 'Total Cheques view: sum of cheque amounts due on each date regardless of status.'
+                : 'Cleared Balance view: opening + finalized deposits - cleared cheques - deducted withdrawals.'}
           </p>
         </div>
 
@@ -343,7 +362,13 @@ export function CalendarView({
           const dayIso = cell.adDateIso;
           const projectedBalance = projectionByDate[dayIso]?.projectedBalance ?? currentBalance;
           const totalCheques = totalChequesByDate[dayIso] ?? 0;
-          const cellMetricValue = metric === 'projectedBalance' ? projectedBalance : totalCheques;
+          const clearedBalance = clearedBalanceByDate[dayIso] ?? openingBalance;
+          const cellMetricValue =
+            metric === 'projectedBalance'
+              ? projectedBalance
+              : metric === 'totalCheques'
+                ? totalCheques
+                : clearedBalance;
           const chequeTextColor = getChequeTextColor(totalCheques);
           const dueItemsCount = dueCountByDate[dayIso] ?? 0;
           const inCurrentMonth = cell.isInCurrentMonth;
@@ -373,21 +398,25 @@ export function CalendarView({
               </div>
 
               <p className="mt-2 text-[11px] text-slate-500">
-                {metric === 'projectedBalance' ? 'Projected' : 'Total Cheques'}
+                {metric === 'projectedBalance'
+                  ? 'Projected'
+                  : metric === 'totalCheques'
+                    ? 'Total Cheques'
+                    : 'Cleared Balance'}
               </p>
               <p
                 className={`text-xs font-semibold ${
-                  metric === 'projectedBalance'
+                  metric === 'projectedBalance' || metric === 'clearedBalance'
                     ? cellMetricValue >= 0
                       ? 'text-emerald-700'
                       : 'text-rose-700'
                     : ''
                 }`}
               >
-                {metric === 'projectedBalance' ? (
-                  currencyShort(cellMetricValue)
-                ) : (
+                {metric === 'totalCheques' ? (
                   <span style={{ color: chequeTextColor }}>{currencyShort(totalCheques)}</span>
+                ) : (
+                  currencyShort(cellMetricValue)
                 )}
               </p>
 
@@ -425,7 +454,7 @@ export function CalendarView({
               </button>
             </div>
 
-            <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-4">
               <article className="rounded-lg border border-emerald-100 bg-emerald-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-emerald-700">Total Deposits</p>
                 <p className="mt-1 text-sm font-semibold text-emerald-800">
@@ -446,6 +475,16 @@ export function CalendarView({
                   }`}
                 >
                   {currency(selectedDateProjectedBalance)}
+                </p>
+              </article>
+              <article className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-700">Cleared Balance</p>
+                <p
+                  className={`mt-1 text-sm font-semibold ${
+                    selectedDateClearedBalance >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                  }`}
+                >
+                  {currency(selectedDateClearedBalance)}
                 </p>
               </article>
             </div>

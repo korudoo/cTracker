@@ -3,6 +3,7 @@ import type { Transaction } from '@/types/domain';
 import {
   calculateCurrentBalance,
   calculateProjectedBalancesForRange,
+  computeClearedBalancesByDate,
   getDateProjectionDetail,
   getMonthProjectionRange,
 } from '@/utils/balanceProjection';
@@ -263,5 +264,80 @@ describe('balanceProjection date helpers', () => {
       withdrawals: 20,
     });
     expect(getDateProjectionDetail(projection, '2026-02-10')).toBeNull();
+  });
+});
+
+describe('balanceProjection.computeClearedBalancesByDate', () => {
+  it('returns opening balance for every day when there are no transactions', () => {
+    const balances = computeClearedBalancesByDate('2026-01-01', '2026-01-03', 1500, []);
+
+    expect(balances).toEqual({
+      '2026-01-01': 1500,
+      '2026-01-02': 1500,
+      '2026-01-03': 1500,
+    });
+  });
+
+  it('decreases balance on and after a cleared cheque day', () => {
+    const balances = computeClearedBalancesByDate(
+      '2026-01-01',
+      '2026-01-05',
+      1000,
+      [
+        makeTransaction({
+          id: 'cleared-cheque',
+          type: 'cheque',
+          status: 'cleared',
+          amount: 200,
+          dueDate: '2026-01-03',
+        }),
+      ],
+    );
+
+    expect(balances['2026-01-02']).toBe(1000);
+    expect(balances['2026-01-03']).toBe(800);
+    expect(balances['2026-01-05']).toBe(800);
+  });
+
+  it('increases balance on and after a deposited/cleared deposit day', () => {
+    const balances = computeClearedBalancesByDate(
+      '2026-01-01',
+      '2026-01-05',
+      1000,
+      [
+        makeTransaction({
+          id: 'cleared-deposit',
+          type: 'deposit',
+          status: 'cleared',
+          amount: 300,
+          dueDate: '2026-01-04',
+        }),
+      ],
+    );
+
+    expect(balances['2026-01-03']).toBe(1000);
+    expect(balances['2026-01-04']).toBe(1300);
+    expect(balances['2026-01-05']).toBe(1300);
+  });
+
+  it('does not include deducted cheque in cleared balance', () => {
+    const balances = computeClearedBalancesByDate(
+      '2026-01-01',
+      '2026-01-03',
+      1000,
+      [
+        makeTransaction({
+          id: 'deducted-cheque',
+          type: 'cheque',
+          status: 'deducted',
+          amount: 250,
+          dueDate: '2026-01-02',
+        }),
+      ],
+    );
+
+    expect(balances['2026-01-01']).toBe(1000);
+    expect(balances['2026-01-02']).toBe(1000);
+    expect(balances['2026-01-03']).toBe(1000);
   });
 });

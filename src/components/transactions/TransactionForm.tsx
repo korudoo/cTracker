@@ -220,9 +220,9 @@ export function TransactionForm({
   const isChequeFutureDueDate = isCheque && selectedDueDate
     ? isFutureDueDate(selectedDueDate, todayIsoInKathmandu)
     : false;
-  const chequePastOrTodayStatusOptions = selectedDueDate
+  const chequePastOrTodayStatusOptions: TransactionStatus[] = selectedDueDate
     ? getChequeStatusOptionsForDueDate(selectedDueDate, todayIsoInKathmandu).filter(
-        (status) => status !== 'pending',
+        (status): status is TransactionStatus => status !== 'pending',
       )
     : ['deducted', 'cleared'];
 

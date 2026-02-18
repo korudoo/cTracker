@@ -258,3 +258,78 @@ export function getDateProjectionDetail(
 ): DayProjection | null {
   return projection.byDate[dateIso] ?? null;
 }
+
+function isFinalizedForClearedBalance(transaction: Transaction): boolean {
+  const status = transaction.status as string;
+
+  if (transaction.type === 'deposit') {
+    return status === 'cleared' || status === 'deposited';
+  }
+
+  if (transaction.type === 'cheque') {
+    return status === 'cleared';
+  }
+
+  if (transaction.type === 'withdrawal') {
+    return status === 'deducted';
+  }
+
+  return false;
+}
+
+function getClearedBalanceDelta(transaction: Transaction): number {
+  if (transaction.type === 'deposit') {
+    return transaction.amount;
+  }
+
+  if (transaction.type === 'cheque' || transaction.type === 'withdrawal') {
+    return -transaction.amount;
+  }
+
+  return 0;
+}
+
+export function computeClearedBalancesByDate(
+  rangeStart: string,
+  rangeEnd: string,
+  openingBalance: number,
+  transactions: Transaction[],
+): Record<string, number> {
+  const dates = listDateRange(rangeStart, rangeEnd);
+  const startEpoch = isoDateToEpochDay(rangeStart);
+
+  const finalizedTransactions = transactions
+    .filter((transaction) => isFinalizedForClearedBalance(transaction))
+    .map((transaction) => ({
+      transaction,
+      dueEpoch: isoDateToEpochDay(transaction.dueDate),
+    }))
+    .sort(
+      (left, right) =>
+        left.dueEpoch - right.dueEpoch ||
+        left.transaction.createdAt.localeCompare(right.transaction.createdAt),
+    );
+
+  let runningBalance = openingBalance;
+  let index = 0;
+
+  while (index < finalizedTransactions.length && finalizedTransactions[index].dueEpoch < startEpoch) {
+    runningBalance += getClearedBalanceDelta(finalizedTransactions[index].transaction);
+    index += 1;
+  }
+
+  const balancesByDate: Record<string, number> = {};
+
+  let dayEpoch = startEpoch;
+  for (const date of dates) {
+    while (index < finalizedTransactions.length && finalizedTransactions[index].dueEpoch === dayEpoch) {
+      runningBalance += getClearedBalanceDelta(finalizedTransactions[index].transaction);
+      index += 1;
+    }
+
+    balancesByDate[date] = runningBalance;
+    dayEpoch += 1;
+  }
+
+  return balancesByDate;
+}

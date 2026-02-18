@@ -89,6 +89,7 @@ export function CalendarPage() {
   const setBsMode = useCallback(() => setCalendarPreference('BS'), [setCalendarPreference]);
   const setProjectedMetric = useCallback(() => setMetric('projectedBalance'), []);
   const setTotalChequesMetric = useCallback(() => setMetric('totalCheques'), []);
+  const setClearedBalanceMetric = useCallback(() => setMetric('clearedBalance'), []);
 
   if (loading) {
     return <div className="rounded-xl bg-white p-6 shadow-card">Loading calendar...</div>;
@@ -109,7 +110,7 @@ export function CalendarPage() {
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Calendar</h2>
             <p className="mt-1 text-sm text-slate-500">
-              View projected daily balance or total cheque amount due by date, then open date details.
+              View projected balance, total cheque amount, or cleared balance by date.
             </p>
           </div>
 
@@ -162,6 +163,17 @@ export function CalendarPage() {
               >
                 Total Cheques
               </button>
+              <button
+                type="button"
+                onClick={setClearedBalanceMetric}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  metric === 'clearedBalance'
+                    ? 'border border-brand-300 bg-brand-50 text-brand-700'
+                    : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Cleared Balance
+              </button>
             </div>
           </div>
         </div>
@@ -170,6 +182,7 @@ export function CalendarPage() {
       <CalendarView
         mode={calendarPreference}
         metric={metric}
+        openingBalance={openingBalance}
         currentBalance={currentBalance}
         monthDate={monthDate}
         transactions={transactions}
