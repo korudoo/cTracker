@@ -24,6 +24,7 @@ import {
 import { toIsoDate } from '@/utils/date';
 import { getQuickRangeDates, type QuickRangeValue } from '@/utils/quickRanges';
 import { saveTransactionFiltersSnapshot } from '@/utils/transactionFiltersSnapshot';
+import { getStatusFilterOptions, isStatusAllowedByTypeFilter } from '@/utils/transactionStatus';
 
 function parseNumberInput(value: string): number | undefined {
   const trimmed = value.trim();
@@ -180,7 +181,10 @@ export function TransactionsPage() {
       summary.push(`Type: ${filters.type}`);
     }
     if (filters.status !== 'all') {
-      summary.push(`Status: ${filters.status}`);
+      const statusLabel =
+        getStatusFilterOptions(filters.type).find((option) => option.value === filters.status)?.label ??
+        filters.status;
+      summary.push(`Status: ${statusLabel}`);
     }
     if (filters.searchText.trim()) {
       summary.push(`Text: "${filters.searchText.trim()}"`);
@@ -209,7 +213,7 @@ export function TransactionsPage() {
       );
     }
     if (!filters.showHistorical && historicalCutoffDate) {
-      summary.push(`Historical hidden: cleared before ${historicalCutoffDate}`);
+      summary.push(`Historical hidden: cleared/deposited before ${historicalCutoffDate}`);
     }
 
     return summary;
@@ -242,7 +246,25 @@ export function TransactionsPage() {
             : null);
 
   const updateFilter = <K extends keyof TransactionFilters>(key: K, value: TransactionFilters[K]) => {
-    setFilters((previous) => ({ ...previous, [key]: value }));
+    setFilters((previous) => {
+      const nextFilters = { ...previous, [key]: value };
+
+      if (key === 'type') {
+        const nextType = value as TransactionFilters['type'];
+        if (!isStatusAllowedByTypeFilter(nextType, previous.status)) {
+          nextFilters.status = 'all';
+        }
+      }
+
+      if (key === 'status') {
+        const nextStatus = value as TransactionFilters['status'];
+        if (!isStatusAllowedByTypeFilter(previous.type, nextStatus)) {
+          nextFilters.status = 'all';
+        }
+      }
+
+      return nextFilters;
+    });
   };
 
   const clearAllFilters = () => {

@@ -180,7 +180,7 @@ export function StatisticsDashboard({
     return [
       { name: 'Pending', value: totals.pending, color: '#f59e0b' },
       { name: 'Deducted', value: totals.deducted, color: '#6366f1' },
-      { name: 'Cleared', value: totals.cleared, color: '#10b981' },
+      { name: 'Cleared / Deposited', value: totals.cleared, color: '#10b981' },
     ];
   }, [rangeTransactions]);
 
@@ -291,7 +291,7 @@ export function StatisticsDashboard({
 
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
           <h3 className="text-base font-semibold text-slate-900">Status Breakdown</h3>
-          <p className="text-sm text-slate-500">Pending vs deducted vs cleared</p>
+          <p className="text-sm text-slate-500">Pending vs deducted vs cleared/deposited</p>
           <div className="mt-3 h-72">
             {loading ? (
               <div className="flex h-full items-center justify-center text-sm text-slate-500">Loading...</div>

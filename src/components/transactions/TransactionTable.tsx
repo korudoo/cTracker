@@ -82,7 +82,7 @@ export function TransactionTable({
                   {formatCurrency(transaction.amount)}
                 </td>
                 <td className="py-3 pr-4">
-                  <StatusBadge status={transaction.status} />
+                  <StatusBadge status={transaction.status} type={transaction.type} />
                 </td>
                 <td className="py-3 pr-4 text-slate-700">{transaction.chequeNumber ?? '—'}</td>
                 <td className="py-3 pr-4 text-xs text-slate-600">

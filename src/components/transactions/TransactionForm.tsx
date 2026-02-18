@@ -11,8 +11,15 @@ import type {
   TransactionStatus,
   TransactionType,
 } from '@/types/domain';
-import { TRANSACTION_STATUSES, TRANSACTION_TYPES } from '@/types/domain';
+import { TRANSACTION_TYPES } from '@/types/domain';
 import { toIsoDate } from '@/utils/date';
+import {
+  coerceTransactionStatus,
+  getChequeStatusOptionsForDueDate,
+  getTodayIsoInKathmandu,
+  getTransactionStatusLabel,
+  isFutureDueDate,
+} from '@/utils/transactionStatus';
 
 interface TransactionFormProps {
   accounts: Account[];
@@ -41,7 +48,7 @@ function getDefaultValues(accounts: Account[]): TransactionFormValues {
   return {
     accountId: accounts[0]?.id ?? '',
     type: 'cheque',
-    status: 'pending',
+    status: 'deducted',
     amount: 0,
     dueDate: today,
     createdDate: today,
@@ -85,6 +92,7 @@ export function TransactionForm({
   onCancelEdit,
 }: TransactionFormProps) {
   const todayIso = toIsoDate(new Date());
+  const todayIsoInKathmandu = getTodayIsoInKathmandu();
 
   const validationSchema: yup.ObjectSchema<TransactionFormValues> = useMemo(
     () =>
@@ -98,7 +106,7 @@ export function TransactionForm({
             .defined(),
           status: yup
             .mixed<TransactionStatus>()
-            .oneOf(TRANSACTION_STATUSES)
+            .oneOf(['pending', 'deducted', 'cleared'])
             .required('Status is required.')
             .defined(),
           amount: yup
@@ -110,16 +118,7 @@ export function TransactionForm({
           dueDate: yup
             .string()
             .required('Due date is required.')
-            .defined()
-            .test(
-              'cheque-due-date',
-              'Cheque date cannot be in the past.',
-              function (this: yup.TestContext, value?: string) {
-                const parent = this.parent as TransactionFormValues;
-                if (parent.type !== 'cheque') return true;
-                return Boolean(value && value >= todayIso);
-              },
-            ),
+            .defined(),
           createdDate: yup
             .string()
             .required('Created date is required.')
@@ -192,6 +191,8 @@ export function TransactionForm({
     handleSubmit,
     reset,
     watch,
+    setValue,
+    getValues,
     formState: { errors },
   } = useForm<TransactionFormValues>({
     resolver: yupResolver(validationSchema),
@@ -213,6 +214,34 @@ export function TransactionForm({
   }, [defaultValues, initialTransaction, reset]);
 
   const selectedType = watch('type');
+  const selectedDueDate = watch('dueDate');
+  const selectedStatus = watch('status');
+  const isCheque = selectedType === 'cheque';
+  const isChequeFutureDueDate = isCheque && selectedDueDate
+    ? isFutureDueDate(selectedDueDate, todayIsoInKathmandu)
+    : false;
+  const chequePastOrTodayStatusOptions = selectedDueDate
+    ? getChequeStatusOptionsForDueDate(selectedDueDate, todayIsoInKathmandu).filter(
+        (status) => status !== 'pending',
+      )
+    : ['deducted', 'cleared'];
+
+  useEffect(() => {
+    if (!selectedDueDate) {
+      return;
+    }
+
+    const nextStatus = coerceTransactionStatus({
+      type: selectedType,
+      dueDateIso: selectedDueDate,
+      status: getValues('status'),
+      todayIso: todayIsoInKathmandu,
+    });
+
+    if (getValues('status') !== nextStatus) {
+      setValue('status', nextStatus, { shouldDirty: true, shouldValidate: true });
+    }
+  }, [getValues, selectedDueDate, selectedType, setValue, todayIsoInKathmandu]);
 
   const onFormSubmit: SubmitHandler<TransactionFormValues> = async (values) => {
     setSubmitError(null);
@@ -221,7 +250,12 @@ export function TransactionForm({
       await onSubmit({
         accountId: values.accountId,
         type: values.type,
-        status: values.status,
+        status: coerceTransactionStatus({
+          type: values.type,
+          dueDateIso: values.dueDate,
+          status: values.status,
+          todayIso: todayIsoInKathmandu,
+        }),
         amount: Number(values.amount),
         dueDate: values.dueDate,
         createdDate: values.type === 'cheque' ? values.createdDate : values.createdDate || todayIso,
@@ -302,20 +336,38 @@ export function TransactionForm({
           {errors.amount ? <p className="text-xs text-rose-600">{errors.amount.message}</p> : null}
         </label>
 
-        <label className="block space-y-1">
-          <span className="text-sm font-medium text-slate-700">Status</span>
-          <select
-            {...register('status')}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-          >
-            {TRANSACTION_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-          {errors.status ? <p className="text-xs text-rose-600">{errors.status.message}</p> : null}
-        </label>
+        {isCheque ? (
+          isChequeFutureDueDate ? (
+            <label className="block space-y-1">
+              <span className="text-sm font-medium text-slate-700">Status</span>
+              <div className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                Pending
+              </div>
+            </label>
+          ) : (
+            <label className="block space-y-1">
+              <span className="text-sm font-medium text-slate-700">Status</span>
+              <select
+                {...register('status')}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              >
+                {chequePastOrTodayStatusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {getTransactionStatusLabel('cheque', status)}
+                  </option>
+                ))}
+              </select>
+              {errors.status ? <p className="text-xs text-rose-600">{errors.status.message}</p> : null}
+            </label>
+          )
+        ) : (
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-slate-700">Status</span>
+            <div className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {getTransactionStatusLabel(selectedType, selectedStatus)}
+            </div>
+          </label>
+        )}
 
         <Controller
           control={control}
@@ -332,6 +384,15 @@ export function TransactionForm({
           )}
         />
         {errors.dueDate ? <p className="md:col-span-2 -mt-3 text-xs text-rose-600">{errors.dueDate.message}</p> : null}
+        {isCheque ? (
+          <p className="md:col-span-2 -mt-2 text-xs text-slate-500">
+            Future cheques are automatically Pending. When the date arrives, they become Deducted. Cleared is set manually.
+          </p>
+        ) : (
+          <p className="md:col-span-2 -mt-2 text-xs text-slate-500">
+            Status will be set automatically based on the date.
+          </p>
+        )}
 
         {selectedType === 'cheque' ? (
           <>

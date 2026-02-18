@@ -33,23 +33,34 @@ interface BuildProjectionParams {
 }
 
 const PROJECTION_ELIGIBLE_STATUSES: TransactionStatus[] = ['pending', 'deducted', 'cleared'];
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function toIsoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+function toIsoDateFromUtcDate(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
-function fromIsoDate(dateIso: string): Date {
-  const [year, month, day] = dateIso.split('-').map(Number);
-  return new Date(year, month - 1, day);
+function isoDateToEpochDay(dateIso: string): number {
+  if (!ISO_DATE_PATTERN.test(dateIso)) {
+    throw new Error(`Invalid ISO date: ${dateIso}`);
+  }
+
+  const [yearPart, monthPart, dayPart] = dateIso.split('-');
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
+}
+
+function epochDayToIsoDate(epochDay: number): string {
+  return toIsoDateFromUtcDate(new Date(epochDay * 86_400_000));
 }
 
 function addDays(dateIso: string, days: number): string {
-  const next = fromIsoDate(dateIso);
-  next.setDate(next.getDate() + days);
-  return toIsoDate(next);
+  return epochDayToIsoDate(isoDateToEpochDay(dateIso) + days);
 }
 
 function cloneTotals(totals: BalanceTotals): BalanceTotals {
@@ -96,17 +107,32 @@ function getProjectedBalance(currentBalance: number, totals: BalanceTotals): num
   return currentBalance + totals.deposits - totals.cheques - totals.withdrawals;
 }
 
+function getNetImpact(totals: BalanceTotals): number {
+  return totals.deposits - totals.cheques - totals.withdrawals;
+}
+
+function getEquivalentOpeningBalance(currentBalance: number, transactions: Transaction[]): number {
+  const clearedTotals = createEmptyTotals();
+
+  transactions
+    .filter((transaction) => transaction.status === 'cleared')
+    .forEach((transaction) => applyTransactionToTotals(clearedTotals, transaction));
+
+  return currentBalance - getNetImpact(clearedTotals);
+}
+
 function listDateRange(startDate: string, endDate: string): string[] {
-  if (startDate > endDate) {
+  const startEpoch = isoDateToEpochDay(startDate);
+  const endEpoch = isoDateToEpochDay(endDate);
+
+  if (startEpoch > endEpoch) {
     throw new Error('startDate must be before or equal to endDate.');
   }
 
-  const dates: string[] = [];
-  let cursor = startDate;
+  const dates: string[] = new Array(endEpoch - startEpoch + 1);
 
-  while (cursor <= endDate) {
-    dates.push(cursor);
-    cursor = addDays(cursor, 1);
+  for (let epochDay = startEpoch; epochDay <= endEpoch; epochDay += 1) {
+    dates[epochDay - startEpoch] = epochDayToIsoDate(epochDay);
   }
 
   return dates;
@@ -135,8 +161,14 @@ export function getMonthProjectionRange(
   const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
 
   return {
-    startDate: addDays(toIsoDate(monthStart), -leadingBufferDays),
-    endDate: addDays(toIsoDate(monthEnd), trailingBufferDays),
+    startDate: addDays(
+      toIsoDateFromUtcDate(new Date(Date.UTC(monthStart.getFullYear(), monthStart.getMonth(), monthStart.getDate()))),
+      -leadingBufferDays,
+    ),
+    endDate: addDays(
+      toIsoDateFromUtcDate(new Date(Date.UTC(monthEnd.getFullYear(), monthEnd.getMonth(), monthEnd.getDate()))),
+      trailingBufferDays,
+    ),
   };
 }
 
@@ -146,7 +178,7 @@ export function getBufferedDateRange(
   leadingBufferDays = 0,
   trailingBufferDays = 0,
 ): ProjectionRange {
-  if (startDate > endDate) {
+  if (isoDateToEpochDay(startDate) > isoDateToEpochDay(endDate)) {
     throw new Error('startDate must be before or equal to endDate.');
   }
   if (leadingBufferDays < 0 || trailingBufferDays < 0) {
@@ -162,37 +194,39 @@ export function getBufferedDateRange(
 export function calculateProjectedBalancesForRange(params: BuildProjectionParams): ProjectionResult {
   const { currentBalance, transactions, startDate, endDate } = params;
   const dates = listDateRange(startDate, endDate);
+  const startEpoch = isoDateToEpochDay(startDate);
+  const openingBalance = getEquivalentOpeningBalance(currentBalance, transactions);
 
-  const projectionEligibleTransactions = [...transactions]
+  const projectionEligibleTransactions = transactions
     .filter((transaction) => isProjectionEligibleStatus(transaction.status))
+    .map((transaction) => ({
+      transaction,
+      dueEpoch: isoDateToEpochDay(transaction.dueDate),
+    }))
     .sort(
       (left, right) =>
-        left.dueDate.localeCompare(right.dueDate) || left.createdAt.localeCompare(right.createdAt),
+        left.dueEpoch - right.dueEpoch ||
+        left.transaction.createdAt.localeCompare(right.transaction.createdAt),
     );
 
   const cumulativeTotals = createEmptyTotals();
   let index = 0;
 
   // Seed running totals with due items before the requested range.
-  while (
-    index < projectionEligibleTransactions.length &&
-    projectionEligibleTransactions[index].dueDate < startDate
-  ) {
-    applyTransactionToTotals(cumulativeTotals, projectionEligibleTransactions[index]);
+  while (index < projectionEligibleTransactions.length && projectionEligibleTransactions[index].dueEpoch < startEpoch) {
+    applyTransactionToTotals(cumulativeTotals, projectionEligibleTransactions[index].transaction);
     index += 1;
   }
 
   const days: DayProjection[] = [];
   const byDate: Record<string, DayProjection> = {};
 
+  let dayEpoch = startEpoch;
   for (const date of dates) {
     const dayTotals = createEmptyTotals();
 
-    while (
-      index < projectionEligibleTransactions.length &&
-      projectionEligibleTransactions[index].dueDate === date
-    ) {
-      const transaction = projectionEligibleTransactions[index];
+    while (index < projectionEligibleTransactions.length && projectionEligibleTransactions[index].dueEpoch === dayEpoch) {
+      const transaction = projectionEligibleTransactions[index].transaction;
       applyTransactionToTotals(dayTotals, transaction);
       applyTransactionToTotals(cumulativeTotals, transaction);
       index += 1;
@@ -202,11 +236,12 @@ export function calculateProjectedBalancesForRange(params: BuildProjectionParams
       date,
       dayTotals,
       cumulativeTotals: cloneTotals(cumulativeTotals),
-      projectedBalance: getProjectedBalance(currentBalance, cumulativeTotals),
+      projectedBalance: getProjectedBalance(openingBalance, cumulativeTotals),
     };
 
     days.push(dayProjection);
     byDate[date] = dayProjection;
+    dayEpoch += 1;
   }
 
   return {

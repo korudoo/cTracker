@@ -2,6 +2,7 @@ import { type RefObject } from 'react';
 import type { DateFieldMode, SortDirection, TransactionSortField } from '@/services/transactions';
 import type { TransactionStatus, TransactionType } from '@/types/domain';
 import type { TransactionFilters } from '@/types/transactionFilters';
+import { getStatusFilterOptions } from '@/utils/transactionStatus';
 
 interface AdvancedFiltersPanelProps {
   panelId: string;
@@ -22,6 +23,8 @@ export function AdvancedFiltersPanel({
   onUpdateFilter,
   dateFromInputRef,
 }: AdvancedFiltersPanelProps) {
+  const statusOptions = getStatusFilterOptions(filters.type);
+
   if (!open) {
     return null;
   }
@@ -92,9 +95,11 @@ export function AdvancedFiltersPanel({
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
             >
               <option value="all">All</option>
-              <option value="pending">Pending</option>
-              <option value="deducted">Deducted</option>
-              <option value="cleared">Cleared</option>
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
 

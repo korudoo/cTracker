@@ -26,6 +26,11 @@ export interface BsDateParts {
   day: number;
 }
 
+export interface BsMonthParts {
+  year: number;
+  month: number;
+}
+
 type NepaliDateInstance = {
   format?: (format: string) => string;
   getEnglishDate?: () => Date;
@@ -35,6 +40,35 @@ type NepaliDateInstance = {
 function buildNepaliDate(value: Date | string): NepaliDateInstance {
   const Constructor = NepaliDate as unknown as { new (input: Date | string): NepaliDateInstance };
   return new Constructor(value);
+}
+
+function isValidBsDateParts(parts: BsDateParts): boolean {
+  return (
+    Number.isInteger(parts.year) &&
+    Number.isInteger(parts.month) &&
+    Number.isInteger(parts.day) &&
+    parts.month >= 1 &&
+    parts.month <= 12 &&
+    parts.day >= 1 &&
+    parts.day <= 32
+  );
+}
+
+function isValidBsMonthParts(parts: BsMonthParts): boolean {
+  return Number.isInteger(parts.year) && Number.isInteger(parts.month) && parts.month >= 1 && parts.month <= 12;
+}
+
+function isoToEpochDay(isoDate: string): number | null {
+  const [yearPart, monthPart, dayPart] = isoDate.split('-');
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
 }
 
 export function adToBs(adDateIso: string): string {
@@ -100,9 +134,97 @@ export function formatBsDateParts(parts: BsDateParts): string {
   return `${year}-${month}-${day}`;
 }
 
+export function bsDatePartsToAdIso(parts: BsDateParts): string | null {
+  if (!isValidBsDateParts(parts)) {
+    return null;
+  }
+
+  return bsToAd(formatBsDateParts(parts));
+}
+
+export function bsDatePartsToAdDate(parts: BsDateParts): Date | null {
+  const adIso = bsDatePartsToAdIso(parts);
+  if (!adIso) {
+    return null;
+  }
+
+  return fromIsoDate(adIso);
+}
+
 export function getBsDatePartsFromAd(adDateIso: string): BsDateParts | null {
   const bsIso = adToBs(adDateIso);
   return parseBsDateParts(bsIso);
+}
+
+export function getBsMonthPartsFromAd(adDateIso: string): BsMonthParts | null {
+  const parts = getBsDatePartsFromAd(adDateIso);
+  if (!parts) {
+    return null;
+  }
+
+  return {
+    year: parts.year,
+    month: parts.month,
+  };
+}
+
+export function shiftBsMonthParts(parts: BsMonthParts, delta: number): BsMonthParts {
+  const zeroBasedMonth = parts.month - 1 + delta;
+  const yearOffset = Math.floor(zeroBasedMonth / 12);
+  const month = ((zeroBasedMonth % 12) + 12) % 12 + 1;
+
+  return {
+    year: parts.year + yearOffset,
+    month,
+  };
+}
+
+export function getBsMonthStartAdIso(parts: BsMonthParts): string | null {
+  if (!isValidBsMonthParts(parts)) {
+    return null;
+  }
+
+  return bsDatePartsToAdIso({
+    year: parts.year,
+    month: parts.month,
+    day: 1,
+  });
+}
+
+export function getBsMonthStartAdDate(parts: BsMonthParts): Date | null {
+  const adIso = getBsMonthStartAdIso(parts);
+  if (!adIso) {
+    return null;
+  }
+
+  return fromIsoDate(adIso);
+}
+
+export function getBsMonthDays(parts: BsMonthParts): number | null {
+  if (!isValidBsMonthParts(parts)) {
+    return null;
+  }
+
+  const startIso = getBsMonthStartAdIso(parts);
+  const nextStartIso = getBsMonthStartAdIso(shiftBsMonthParts(parts, 1));
+
+  if (!startIso || !nextStartIso) {
+    return null;
+  }
+
+  const startEpoch = isoToEpochDay(startIso);
+  const nextStartEpoch = isoToEpochDay(nextStartIso);
+
+  if (startEpoch === null || nextStartEpoch === null) {
+    return null;
+  }
+
+  const dayCount = nextStartEpoch - startEpoch;
+  if (!Number.isInteger(dayCount) || dayCount < 1 || dayCount > 32) {
+    return null;
+  }
+
+  return dayCount;
 }
 
 export function getBsMonthName(month: number): string | null {
@@ -112,7 +234,7 @@ export function getBsMonthName(month: number): string | null {
   return BS_MONTH_NAMES[month - 1];
 }
 
-export function formatBsDateReadableFromAd(adDateIso: string): string {
+export function formatBsDateDayMonthYearFromAd(adDateIso: string): string {
   const parts = getBsDatePartsFromAd(adDateIso);
   if (!parts) {
     return '';
@@ -123,7 +245,12 @@ export function formatBsDateReadableFromAd(adDateIso: string): string {
     return '';
   }
 
-  return `${parts.day} ${monthName} ${parts.year} BS`;
+  return `${parts.day} ${monthName} ${parts.year}`;
+}
+
+export function formatBsDateReadableFromAd(adDateIso: string): string {
+  const label = formatBsDateDayMonthYearFromAd(adDateIso);
+  return label ? `${label} BS` : '';
 }
 
 export function formatBsMonthYearFromAd(adDateIso: string): string {

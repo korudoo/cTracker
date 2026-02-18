@@ -22,7 +22,7 @@ export function SettingsPage() {
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
-  const [calendarPreference, setCalendarPreference] = useState<'AD' | 'BS'>('AD');
+  const [calendarPreference, setCalendarPreference] = useState<'AD' | 'BS'>('BS');
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
 
   const [selectedAccountId, setSelectedAccountId] = useState('');

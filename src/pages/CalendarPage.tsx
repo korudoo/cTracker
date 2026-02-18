@@ -1,10 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
-import { CalendarView } from '@/components/dashboard/CalendarView';
+import { CalendarView, type CalendarMetric } from '@/components/dashboard/CalendarView';
 import { useCalendar } from '@/context/CalendarContext';
 import { calculateCurrentBalance } from '@/utils/balance';
 import type { Account, Transaction } from '@/types/domain';
 import { getAccounts, getProfile, getTransactions, runDueStatusTransition } from '@/services/transactions';
 import { useQuery } from '@tanstack/react-query';
+
+const EMPTY_ACCOUNTS: Account[] = [];
+const EMPTY_TRANSACTIONS: Transaction[] = [];
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error) {
@@ -22,8 +25,9 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function CalendarPage() {
-  const { mode, setMode } = useCalendar();
-  const [monthDate, setMonthDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const { calendarPreference, setCalendarPreference } = useCalendar();
+  const [monthDate, setMonthDate] = useState(new Date());
+  const [metric, setMetric] = useState<CalendarMetric>('projectedBalance');
 
   const profileQuery = useQuery({
     queryKey: ['profile'],
@@ -72,8 +76,8 @@ export function CalendarPage() {
             ? getErrorMessage(transactionsQuery.error, 'Unable to load calendar transactions.')
             : null;
 
-  const accounts: Account[] = accountsQuery.data ?? [];
-  const transactions: Transaction[] = transactionsQuery.data ?? [];
+  const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
+  const transactions = transactionsQuery.data ?? EMPTY_TRANSACTIONS;
 
   const openingBalance = accounts.reduce((total, account) => total + account.openingBalance, 0);
   const currentBalance = useMemo(
@@ -81,8 +85,10 @@ export function CalendarPage() {
     [openingBalance, transactions],
   );
 
-  const setAdMode = useCallback(() => setMode('AD'), [setMode]);
-  const setBsMode = useCallback(() => setMode('BS'), [setMode]);
+  const setAdMode = useCallback(() => setCalendarPreference('AD'), [setCalendarPreference]);
+  const setBsMode = useCallback(() => setCalendarPreference('BS'), [setCalendarPreference]);
+  const setProjectedMetric = useCallback(() => setMetric('projectedBalance'), []);
+  const setTotalChequesMetric = useCallback(() => setMetric('totalCheques'), []);
 
   if (loading) {
     return <div className="rounded-xl bg-white p-6 shadow-card">Loading calendar...</div>;
@@ -103,39 +109,67 @@ export function CalendarPage() {
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Calendar</h2>
             <p className="mt-1 text-sm text-slate-500">
-              View projected daily balance and open date details for transactions due on that date.
+              View projected daily balance or total cheque amount due by date, then open date details.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={setAdMode}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                mode === 'AD'
-                  ? 'border border-brand-300 bg-brand-50 text-brand-700'
-                  : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              AD
-            </button>
-            <button
-              type="button"
-              onClick={setBsMode}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                mode === 'BS'
-                  ? 'border border-brand-300 bg-brand-50 text-brand-700'
-                  : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              BS
-            </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={setAdMode}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  calendarPreference === 'AD'
+                    ? 'border border-brand-300 bg-brand-50 text-brand-700'
+                    : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                AD
+              </button>
+              <button
+                type="button"
+                onClick={setBsMode}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  calendarPreference === 'BS'
+                    ? 'border border-brand-300 bg-brand-50 text-brand-700'
+                    : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                BS
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={setProjectedMetric}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  metric === 'projectedBalance'
+                    ? 'border border-brand-300 bg-brand-50 text-brand-700'
+                    : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Projected Balance
+              </button>
+              <button
+                type="button"
+                onClick={setTotalChequesMetric}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  metric === 'totalCheques'
+                    ? 'border border-brand-300 bg-brand-50 text-brand-700'
+                    : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Total Cheques
+              </button>
+            </div>
           </div>
         </div>
       </section>
 
       <CalendarView
-        mode={mode}
+        mode={calendarPreference}
+        metric={metric}
         currentBalance={currentBalance}
         monthDate={monthDate}
         transactions={transactions}

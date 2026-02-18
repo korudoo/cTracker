@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { StatsCards } from '@/components/dashboard/StatsCards';
+import { useCalendar } from '@/context/CalendarContext';
 import { calculateCurrentBalance, calculatePendingTotals, calculateProjectedBalanceOnDate } from '@/utils/balance';
 import { calculateProjectedBalancesForRange } from '@/utils/balanceProjection';
 import { formatAdDate, toIsoDate } from '@/utils/date';
+import { formatBsDateDayMonthYearFromAd } from '@/utils/nepaliDate';
 import type { Account, Profile, Transaction } from '@/types/domain';
 import { getAccounts, getProfile, getTransactions, runDueStatusTransition } from '@/services/transactions';
 
@@ -37,7 +39,16 @@ function formatNpr(value: number): string {
   });
 }
 
+function formatCashflowDate(dateIso: string, calendarPreference: 'AD' | 'BS'): string {
+  if (calendarPreference === 'BS') {
+    return formatBsDateDayMonthYearFromAd(dateIso) || formatAdDate(dateIso);
+  }
+
+  return formatAdDate(dateIso);
+}
+
 export function DashboardPage() {
+  const { calendarPreference } = useCalendar();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -219,7 +230,7 @@ export function DashboardPage() {
                 const deductions = day.dayTotals.cheques + day.dayTotals.withdrawals;
                 return (
                   <tr key={day.date}>
-                    <td className="py-2 pr-4 text-slate-700">{formatAdDate(day.date)}</td>
+                    <td className="py-2 pr-4 text-slate-700">{formatCashflowDate(day.date, calendarPreference)}</td>
                     <td className="py-2 pr-4 text-emerald-700">{formatNpr(day.dayTotals.deposits)}</td>
                     <td className="py-2 pr-4 text-rose-700">{formatNpr(deductions)}</td>
                     <td

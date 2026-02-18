@@ -7,6 +7,12 @@ import type {
   TransactionStatus,
   TransactionType,
 } from '@/types/domain';
+import {
+  AUTO_STATUS_TIMEZONE,
+  coerceTransactionStatus,
+  getTodayIsoInKathmandu,
+  isIsoDate,
+} from '@/utils/transactionStatus';
 
 const PROFILE_SELECT =
   'id,email,opening_balance,notifications_enabled,timezone,calendar_preference,created_at,updated_at';
@@ -118,13 +124,21 @@ function normalizeTransactionInput(input: TransactionInput) {
     throw new Error('Amount must be greater than 0.');
   }
 
-  if (!input.dueDate) {
-    throw new Error('Due date is required.');
+  if (!input.dueDate || !isIsoDate(input.dueDate)) {
+    throw new Error('Due date is required in YYYY-MM-DD format.');
   }
 
-  if (!input.createdDate) {
-    throw new Error('Created date is required.');
+  if (!input.createdDate || !isIsoDate(input.createdDate)) {
+    throw new Error('Created date is required in YYYY-MM-DD format.');
   }
+
+  const todayIsoInKathmandu = getTodayIsoInKathmandu();
+  const status = coerceTransactionStatus({
+    type: input.type,
+    dueDateIso: input.dueDate,
+    status: input.status,
+    todayIso: todayIsoInKathmandu,
+  });
 
   const chequeNumber = input.type === 'cheque' ? input.chequeNumber?.trim() || null : null;
   if (input.type === 'cheque' && !chequeNumber) {
@@ -150,7 +164,7 @@ function normalizeTransactionInput(input: TransactionInput) {
     account_id: input.accountId,
     type: input.type,
     amount,
-    status: input.status,
+    status,
     due_date: input.dueDate,
     created_date: input.createdDate,
     cheque_number: chequeNumber,
@@ -192,8 +206,10 @@ async function getAuthenticatedUser() {
 }
 
 export async function runDueStatusTransition(timezone: string) {
+  const targetTimezone = timezone === AUTO_STATUS_TIMEZONE ? timezone : AUTO_STATUS_TIMEZONE;
+
   const { error } = await supabase.rpc('process_due_status_transitions', {
-    p_timezone: timezone,
+    p_timezone: targetTimezone,
   });
 
   if (error) {
@@ -223,7 +239,7 @@ export async function getProfile(): Promise<Profile> {
           opening_balance: 0,
           notifications_enabled: false,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-          calendar_preference: 'AD',
+          calendar_preference: 'BS',
         },
         { onConflict: 'id' },
       )

@@ -62,6 +62,75 @@ describe('balanceProjection.calculateCurrentBalance', () => {
 });
 
 describe('balanceProjection.calculateProjectedBalancesForRange', () => {
+  it('returns a flat zero projection when there are no transactions and current balance is zero', () => {
+    const projection = calculateProjectedBalancesForRange({
+      currentBalance: 0,
+      transactions: [],
+      startDate: '2026-01-01',
+      endDate: '2026-01-05',
+    });
+
+    expect(projection.days).toHaveLength(5);
+    projection.days.forEach((day) => {
+      expect(day.projectedBalance).toBe(0);
+      expect(day.dayTotals).toEqual({
+        deposits: 0,
+        cheques: 0,
+        withdrawals: 0,
+      });
+    });
+  });
+
+  it('applies a single pending deposit only on/after its due date', () => {
+    const transactions: Transaction[] = [
+      makeTransaction({
+        id: 'single-deposit',
+        type: 'deposit',
+        status: 'pending',
+        amount: 102000,
+        dueDate: '2026-01-03',
+      }),
+    ];
+
+    const projection = calculateProjectedBalancesForRange({
+      currentBalance: 0,
+      transactions,
+      startDate: '2026-01-01',
+      endDate: '2026-01-05',
+    });
+
+    expect(projection.byDate['2026-01-01']?.projectedBalance).toBe(0);
+    expect(projection.byDate['2026-01-02']?.projectedBalance).toBe(0);
+    expect(projection.byDate['2026-01-03']?.projectedBalance).toBe(102000);
+    expect(projection.byDate['2026-01-04']?.projectedBalance).toBe(102000);
+    expect(projection.byDate['2026-01-05']?.projectedBalance).toBe(102000);
+  });
+
+  it('does not double count a cleared/deposited deposit already reflected in current balance', () => {
+    const transactions: Transaction[] = [
+      makeTransaction({
+        id: 'single-cleared-deposit',
+        type: 'deposit',
+        status: 'cleared',
+        amount: 102000,
+        dueDate: '2026-01-03',
+      }),
+    ];
+
+    const projection = calculateProjectedBalancesForRange({
+      currentBalance: 102000,
+      transactions,
+      startDate: '2026-01-01',
+      endDate: '2026-01-05',
+    });
+
+    expect(projection.byDate['2026-01-01']?.projectedBalance).toBe(0);
+    expect(projection.byDate['2026-01-02']?.projectedBalance).toBe(0);
+    expect(projection.byDate['2026-01-03']?.projectedBalance).toBe(102000);
+    expect(projection.byDate['2026-01-04']?.projectedBalance).toBe(102000);
+    expect(projection.byDate['2026-01-05']?.projectedBalance).toBe(102000);
+  });
+
   it('projects using pending + deducted + cleared and carries previous day when no transactions', () => {
     const transactions: Transaction[] = [
       makeTransaction({
@@ -95,7 +164,7 @@ describe('balanceProjection.calculateProjectedBalancesForRange', () => {
     ];
 
     const projection = calculateProjectedBalancesForRange({
-      currentBalance: 1000,
+      currentBalance: 1100,
       transactions,
       startDate: '2026-01-01',
       endDate: '2026-01-07',
@@ -175,7 +244,7 @@ describe('balanceProjection date helpers', () => {
     ];
 
     const projection = calculateProjectedBalancesForRange({
-      currentBalance: 1000,
+      currentBalance: 980,
       transactions,
       startDate: '2026-02-01',
       endDate: '2026-02-03',

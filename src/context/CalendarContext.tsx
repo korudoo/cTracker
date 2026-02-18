@@ -4,6 +4,9 @@ import type { CalendarMode } from '@/types/domain';
 const STORAGE_KEY = 'cheque-tracker-calendar-mode';
 
 interface CalendarContextValue {
+  calendarPreference: CalendarMode;
+  setCalendarPreference: (mode: CalendarMode) => void;
+  toggleCalendarPreference: () => void;
   mode: CalendarMode;
   setMode: (mode: CalendarMode) => void;
   toggleMode: () => void;
@@ -12,22 +15,27 @@ interface CalendarContextValue {
 const CalendarContext = createContext<CalendarContextValue | undefined>(undefined);
 
 export function CalendarProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<CalendarMode>(() => {
+  const [calendarPreference, setCalendarPreference] = useState<CalendarMode>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved === 'BS' ? 'BS' : 'AD';
+    return saved === 'AD' || saved === 'BS' ? saved : 'BS';
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, mode);
-  }, [mode]);
+    localStorage.setItem(STORAGE_KEY, calendarPreference);
+  }, [calendarPreference]);
 
   const value = useMemo<CalendarContextValue>(
     () => ({
-      mode,
-      setMode,
-      toggleMode: () => setMode((previousMode) => (previousMode === 'AD' ? 'BS' : 'AD')),
+      calendarPreference,
+      setCalendarPreference,
+      toggleCalendarPreference: () =>
+        setCalendarPreference((previousMode) => (previousMode === 'AD' ? 'BS' : 'AD')),
+      mode: calendarPreference,
+      setMode: setCalendarPreference,
+      toggleMode: () =>
+        setCalendarPreference((previousMode) => (previousMode === 'AD' ? 'BS' : 'AD')),
     }),
-    [mode],
+    [calendarPreference],
   );
 
   return <CalendarContext.Provider value={value}>{children}</CalendarContext.Provider>;
