@@ -70,6 +70,31 @@ function currency(value: number): string {
   });
 }
 
+function formatMobileCompactValue(value: number): string {
+  const absoluteValue = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+
+  if (absoluteValue === 0) {
+    return '0';
+  }
+
+  if (absoluteValue >= 1_000_000) {
+    const millions = absoluteValue / 1_000_000;
+    const millionLabel =
+      millions >= 10 ? Math.round(millions).toString() : millions.toFixed(1).replace(/\.0$/, '');
+    return `${sign}${millionLabel}M`;
+  }
+
+  if (absoluteValue >= 1_000) {
+    const thousands = absoluteValue / 1_000;
+    const thousandLabel =
+      thousands >= 100 ? Math.round(thousands).toString() : thousands.toFixed(1).replace(/\.0$/, '');
+    return `${sign}${thousandLabel}k`;
+  }
+
+  return `${sign}${Math.round(absoluteValue)}`;
+}
+
 function addDays(referenceDate: Date, delta: number): Date {
   const shifted = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
   shifted.setDate(shifted.getDate() + delta);
@@ -308,33 +333,46 @@ export function CalendarView({
     : openingBalance;
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <section className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-card sm:p-4">
+      <div className="mb-3 space-y-2 sm:mb-4 sm:space-y-2.5">
         <h2 className="text-lg font-semibold text-slate-900">Cash Flow Calendar</h2>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onMonthDateChange(shiftMonthForMode(mode, monthDate, -1))}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
-          >
-            Prev
-          </button>
-          <span className="min-w-32 text-center text-sm font-medium text-slate-700">{gridData.activeMonthLabel}</span>
-          <button
-            type="button"
-            onClick={() => onMonthDateChange(shiftMonthForMode(mode, monthDate, 1))}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
-          >
-            Next
-          </button>
-          <button
-            type="button"
-            onClick={() => onMonthDateChange(getTodayMonthStartForMode(mode, today))}
-            className="rounded-md border border-brand-300 px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50"
-          >
-            Today
-          </button>
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => onMonthDateChange(shiftMonthForMode(mode, monthDate, -1))}
+              className="rounded-full border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 sm:px-3 sm:text-sm"
+            >
+              Prev
+            </button>
+            <span className="min-w-0 flex-1 truncate text-center text-sm font-medium text-slate-700">
+              {gridData.activeMonthLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => onMonthDateChange(shiftMonthForMode(mode, monthDate, 1))}
+              className="rounded-full border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 sm:px-3 sm:text-sm"
+            >
+              Next
+            </button>
+            <button
+              type="button"
+              onClick={() => onMonthDateChange(getTodayMonthStartForMode(mode, today))}
+              className="hidden rounded-full border border-brand-300 px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50 sm:inline-flex"
+            >
+              Today
+            </button>
+          </div>
+          <div className="flex justify-end sm:hidden">
+            <button
+              type="button"
+              onClick={() => onMonthDateChange(getTodayMonthStartForMode(mode, today))}
+              className="rounded-full border border-brand-300 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+            >
+              Today
+            </button>
+          </div>
         </div>
       </div>
 
@@ -348,7 +386,7 @@ export function CalendarView({
         <span>Sat</span>
       </div>
 
-      <div className="mt-2 grid grid-cols-7 gap-1">
+      <div className="mt-1.5 grid grid-cols-7 gap-1 sm:mt-2">
         {gridData.cells.map((cell) => {
           const dayIso = cell.adDateIso;
           const projectedBalance = projectionByDate[dayIso]?.projectedBalance ?? currentBalance;
@@ -365,13 +403,18 @@ export function CalendarView({
           const inCurrentMonth = cell.isInCurrentMonth;
           const isToday = dayIso === todayIso;
           const isSelected = selectedDateIso === dayIso;
+          const desktopValue = metric === 'totalCheques' ? currencyShort(totalCheques) : currencyShort(cellMetricValue);
+          const mobileValue =
+            metric === 'totalCheques'
+              ? formatMobileCompactValue(totalCheques)
+              : formatMobileCompactValue(cellMetricValue);
 
           return (
             <button
               type="button"
               key={dayIso}
               onClick={() => setSelectedDateIso(dayIso)}
-              className={`min-h-28 rounded-md border p-2 ${
+              className={`min-h-[72px] rounded-md border px-1 py-1 sm:min-h-28 sm:px-2 sm:py-2 ${
                 isToday
                   ? 'border-brand-400 bg-brand-50'
                   : isSelected
@@ -381,32 +424,52 @@ export function CalendarView({
                       : 'border-slate-200 bg-slate-100/60'
               }`}
             >
-              <div className="flex items-start justify-between">
-                <span className={`text-sm font-semibold ${inCurrentMonth ? 'text-slate-800' : 'text-slate-400'}`}>
-                  {mode === 'AD' ? cell.adDayLabel : cell.bsDayLabel}
-                </span>
-                <span className="text-[10px] text-slate-400">{mode === 'AD' ? cell.bsDayLabel : cell.adDayLabel}</span>
+              <div className="flex h-full flex-col">
+                <div className="flex items-start justify-between">
+                  <span
+                    className={`text-sm font-semibold leading-tight sm:text-sm ${
+                      inCurrentMonth ? 'text-slate-800' : 'text-slate-400'
+                    }`}
+                  >
+                    {mode === 'AD' ? cell.adDayLabel : cell.bsDayLabel}
+                  </span>
+                  <span className="hidden text-[10px] text-slate-400 sm:inline">
+                    {mode === 'AD' ? cell.bsDayLabel : cell.adDayLabel}
+                  </span>
+                </div>
+
+                <p
+                  className={`mt-1 text-sm font-medium leading-tight whitespace-nowrap sm:mt-2 sm:text-xs sm:font-semibold ${
+                    metric === 'projectedBalance' || metric === 'clearedBalance'
+                      ? cellMetricValue >= 0
+                        ? 'text-emerald-700'
+                        : 'text-rose-700'
+                      : ''
+                  }`}
+                >
+                  {metric === 'totalCheques' ? (
+                    <>
+                      <span className="block sm:hidden" style={{ color: chequeTextColor }}>
+                        {mobileValue}
+                      </span>
+                      <span className="hidden sm:inline" style={{ color: chequeTextColor }}>
+                        {desktopValue}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="block sm:hidden">{mobileValue}</span>
+                      <span className="hidden sm:inline">{desktopValue}</span>
+                    </>
+                  )}
+                </p>
+
+                {dueItemsCount > 0 ? (
+                  <p className="mt-auto text-[10px] leading-tight text-slate-500">
+                    {dueItemsCount} {dueItemsCount === 1 ? 'item' : 'items'}
+                  </p>
+                ) : null}
               </div>
-
-              <p
-                className={`mt-2 text-xs font-semibold ${
-                  metric === 'projectedBalance' || metric === 'clearedBalance'
-                    ? cellMetricValue >= 0
-                      ? 'text-emerald-700'
-                      : 'text-rose-700'
-                    : ''
-                }`}
-              >
-                {metric === 'totalCheques' ? (
-                  <span style={{ color: chequeTextColor }}>{currencyShort(totalCheques)}</span>
-                ) : (
-                  currencyShort(cellMetricValue)
-                )}
-              </p>
-
-              <p className="mt-1 text-[11px] text-slate-500">
-                {dueItemsCount} {dueItemsCount === 1 ? 'item' : 'items'}
-              </p>
             </button>
           );
         })}

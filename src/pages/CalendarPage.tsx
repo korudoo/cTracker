@@ -108,50 +108,53 @@ export function CalendarPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
+    <div className="space-y-3 sm:space-y-5">
+      <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-card sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Calendar</h2>
           </div>
 
           <div className="flex flex-col items-end gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
               <button
                 type="button"
                 onClick={setProjectedMetric}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                className={`rounded-md px-2.5 py-1.5 text-xs font-medium sm:px-3 sm:text-sm ${
                   metric === 'projectedBalance'
                     ? 'border border-brand-300 bg-brand-50 text-brand-700'
                     : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Projected Balance
+                <span className="sm:hidden">Projected</span>
+                <span className="hidden sm:inline">Projected Balance</span>
               </button>
               <button
                 type="button"
                 onClick={setTotalChequesMetric}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                className={`rounded-md px-2.5 py-1.5 text-xs font-medium sm:px-3 sm:text-sm ${
                   metric === 'totalCheques'
                     ? 'border border-brand-300 bg-brand-50 text-brand-700'
                     : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Total Cheques
+                <span className="sm:hidden">Cheques</span>
+                <span className="hidden sm:inline">Total Cheques</span>
               </button>
               <button
                 type="button"
                 onClick={setClearedBalanceMetric}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                className={`rounded-md px-2.5 py-1.5 text-xs font-medium sm:px-3 sm:text-sm ${
                   metric === 'clearedBalance'
                     ? 'border border-brand-300 bg-brand-50 text-brand-700'
                     : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Cleared Balance
+                <span className="sm:hidden">Cleared</span>
+                <span className="hidden sm:inline">Cleared Balance</span>
               </button>
             </div>
-            <p className="text-sm text-slate-600">
+            <p className="text-xs text-slate-600 sm:text-sm">
               Showing: <span className="font-medium text-slate-800">{metricLabel}</span>
             </p>
           </div>
