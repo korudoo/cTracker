@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { CalendarView, type CalendarMetric } from '@/components/dashboard/CalendarView';
+import { WeeklyCalendar } from '@/components/dashboard/WeeklyCalendar';
 import { useCalendar } from '@/context/CalendarContext';
 import { calculateCurrentBalance } from '@/utils/balance';
 import type { Account, Transaction } from '@/types/domain';
@@ -169,6 +170,14 @@ export function CalendarPage() {
         monthDate={monthDate}
         transactions={transactions}
         onMonthDateChange={setMonthDate}
+      />
+
+      <WeeklyCalendar
+        mode={calendarPreference}
+        metric={metric}
+        openingBalance={openingBalance}
+        currentBalance={currentBalance}
+        transactions={transactions}
       />
     </div>
   );
