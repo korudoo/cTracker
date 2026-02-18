@@ -3,9 +3,7 @@ const YELLOW = '#EAB308';
 const RED = '#DC2626';
 const DARK_RED = '#7F1D1D';
 
-const MIN_TOTAL = 0;
-const MID_TOTAL_1 = 500_000;
-const MID_TOTAL_2 = 1_000_000;
+const RED_START_TOTAL = 500_000;
 const MAX_TOTAL = 1_500_000;
 
 interface RgbColor {
@@ -47,7 +45,7 @@ function lerp(start: number, end: number, progress: number): number {
   return start + (end - start) * progress;
 }
 
-function interpolateHex(startHex: string, endHex: string, progress: number): string {
+function interpolateColor(startHex: string, endHex: string, progress: number): string {
   const t = clamp(progress, 0, 1);
   const start = hexToRgb(startHex);
   const end = hexToRgb(endHex);
@@ -61,19 +59,18 @@ function interpolateHex(startHex: string, endHex: string, progress: number): str
 
 export function getChequeTextColor(total: number): string {
   const normalized = Number.isFinite(total) ? total : 0;
-  const clampedTotal = clamp(normalized, MIN_TOTAL, MAX_TOTAL);
 
-  if (clampedTotal <= MID_TOTAL_1) {
-    const progress = clampedTotal / (MID_TOTAL_1 - MIN_TOTAL);
-    return interpolateHex(GREEN, YELLOW, progress);
+  if (normalized <= 0) {
+    return GREEN;
   }
 
-  if (clampedTotal <= MID_TOTAL_2) {
-    const progress = (clampedTotal - MID_TOTAL_1) / (MID_TOTAL_2 - MID_TOTAL_1);
-    return interpolateHex(YELLOW, RED, progress);
+  const clampedTotal = clamp(normalized, 1, MAX_TOTAL);
+
+  if (clampedTotal <= RED_START_TOTAL) {
+    const progress = (clampedTotal - 1) / (RED_START_TOTAL - 1);
+    return interpolateColor(YELLOW, RED, progress);
   }
 
-  const progress = (clampedTotal - MID_TOTAL_2) / (MAX_TOTAL - MID_TOTAL_2);
-  return interpolateHex(RED, DARK_RED, progress);
+  const progress = (clampedTotal - RED_START_TOTAL) / (MAX_TOTAL - RED_START_TOTAL);
+  return interpolateColor(RED, DARK_RED, progress);
 }
-

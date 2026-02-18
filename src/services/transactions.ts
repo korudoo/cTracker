@@ -13,6 +13,7 @@ import {
   getTodayIsoInKathmandu,
   isIsoDate,
 } from '@/utils/transactionStatus';
+import { normalizePayee, sanitizePayeeName } from '@/utils/payee';
 
 const PROFILE_SELECT =
   'id,email,opening_balance,notifications_enabled,timezone,calendar_preference,created_at,updated_at';
@@ -22,6 +23,17 @@ const TRANSACTION_SELECT = '*,accounts(name)';
 export type TransactionSortField = 'date' | 'amount' | 'status' | 'type';
 export type DateFieldMode = 'dueDate' | 'createdDate';
 export type SortDirection = 'asc' | 'desc';
+
+export interface PayeeMemory {
+  id: string;
+  accountId: string;
+  name: string;
+  nameNormalized: string;
+  usageCount: number;
+  lastUsedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface GetTransactionsParams {
   accountId?: string;
@@ -38,6 +50,28 @@ export interface GetTransactionsParams {
   dateSortField?: DateFieldMode;
   hideHistoricalCleared?: boolean;
   historicalCutoffDate?: string;
+}
+
+function mapPayeeMemory(row: {
+  id: string;
+  account_id: string;
+  name: string;
+  name_normalized: string;
+  usage_count: number;
+  last_used_at: string;
+  created_at: string;
+  updated_at: string;
+}): PayeeMemory {
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    name: row.name,
+    nameNormalized: row.name_normalized,
+    usageCount: Number(row.usage_count),
+    lastUsedAt: row.last_used_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 function mapProfile(row: {
@@ -146,7 +180,7 @@ function normalizeTransactionInput(input: TransactionInput) {
     throw new Error('Cheque number is required for cheque transactions.');
   }
 
-  const payee = input.type === 'cheque' ? input.payee?.trim() || null : null;
+  const payee = input.type === 'cheque' ? sanitizePayeeName(input.payee ?? '') || null : null;
   if (input.type === 'cheque' && !payee) {
     throw new Error('Payee is required for cheque transactions.');
   }
@@ -636,6 +670,59 @@ export async function getChequesForAccount(accountId: string): Promise<Transacti
   });
 }
 
+export async function getPayeesForAccount(accountId: string, limit = 50): Promise<PayeeMemory[]> {
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 200) : 50;
+  const { data, error } = await supabase
+    .from('payees')
+    .select('id,account_id,name,name_normalized,usage_count,last_used_at,created_at,updated_at')
+    .eq('account_id', accountId)
+    .order('last_used_at', { ascending: false })
+    .limit(safeLimit);
+
+  if (error) {
+    if (error.code === '42P01') {
+      throw new Error(
+        'Payee memory schema is not applied. Please run migration 008_payee_memory_and_autosuggest.sql in Supabase.',
+      );
+    }
+    throw error;
+  }
+
+  return (data ?? []).map((row) => mapPayeeMemory(row as never));
+}
+
+export async function upsertPayeeMemoryForAccount(input: {
+  accountId: string;
+  payeeName: string;
+}): Promise<void> {
+  const cleanName = sanitizePayeeName(input.payeeName);
+  const normalizedName = normalizePayee(cleanName);
+
+  if (!cleanName || !normalizedName) {
+    return;
+  }
+
+  const { error } = await supabase.rpc('upsert_payee_memory', {
+    p_account_id: input.accountId,
+    p_name: cleanName,
+    p_name_normalized: normalizedName,
+  });
+
+  if (error) {
+    if (error.code === '42883') {
+      throw new Error(
+        'Payee memory function is not applied. Please run migration 008_payee_memory_and_autosuggest.sql in Supabase.',
+      );
+    }
+    if (error.code === '42P01') {
+      throw new Error(
+        'Payee memory schema is not applied. Please run migration 008_payee_memory_and_autosuggest.sql in Supabase.',
+      );
+    }
+    throw error;
+  }
+}
+
 export async function updateChequeStatus(
   transactionId: string,
   status: Extract<TransactionStatus, 'deducted' | 'cleared'>,
@@ -658,6 +745,13 @@ export async function updateChequeStatus(
 export async function createTransaction(input: TransactionInput): Promise<Transaction> {
   const payload = normalizeTransactionInput(input);
 
+  if (payload.type === 'cheque' && payload.payee) {
+    await upsertPayeeMemoryForAccount({
+      accountId: payload.account_id,
+      payeeName: payload.payee,
+    });
+  }
+
   const { data, error } = await supabase
     .from('transactions')
     .insert(payload)
@@ -679,6 +773,13 @@ export async function updateTransaction(
   input: TransactionInput,
 ): Promise<Transaction> {
   const payload = normalizeTransactionInput(input);
+
+  if (payload.type === 'cheque' && payload.payee) {
+    await upsertPayeeMemoryForAccount({
+      accountId: payload.account_id,
+      payeeName: payload.payee,
+    });
+  }
 
   const { error } = await supabase.from('transactions').update(payload).eq('id', transactionId);
 

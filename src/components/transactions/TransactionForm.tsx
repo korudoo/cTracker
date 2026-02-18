@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm, type SubmitHandler } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DateField } from '@/components/common/DateField';
+import { PayeeAutosuggestInput } from '@/components/transactions/PayeeAutosuggestInput';
 import type {
   Account,
   CalendarMode,
@@ -12,7 +14,9 @@ import type {
   TransactionType,
 } from '@/types/domain';
 import { TRANSACTION_TYPES } from '@/types/domain';
+import { getPayeesForAccount } from '@/services/transactions';
 import { toIsoDate } from '@/utils/date';
+import { sanitizePayeeName } from '@/utils/payee';
 import {
   coerceTransactionStatus,
   getChequeStatusOptionsForDueDate,
@@ -91,6 +95,7 @@ export function TransactionForm({
   onSubmit,
   onCancelEdit,
 }: TransactionFormProps) {
+  const queryClient = useQueryClient();
   const todayIso = toIsoDate(new Date());
   const todayIsoInKathmandu = getTodayIsoInKathmandu();
 
@@ -214,6 +219,7 @@ export function TransactionForm({
   }, [defaultValues, initialTransaction, reset]);
 
   const selectedType = watch('type');
+  const selectedAccountId = watch('accountId');
   const selectedDueDate = watch('dueDate');
   const selectedStatus = watch('status');
   const isCheque = selectedType === 'cheque';
@@ -225,6 +231,18 @@ export function TransactionForm({
         (status): status is TransactionStatus => status !== 'pending',
       )
     : ['deducted', 'cleared'];
+
+  const payeesQuery = useQuery({
+    queryKey: ['payees', selectedAccountId],
+    queryFn: async () => getPayeesForAccount(selectedAccountId, 50),
+    enabled: isCheque && Boolean(selectedAccountId),
+    staleTime: 60_000,
+  });
+
+  const payeeSuggestions = useMemo(
+    () => (payeesQuery.data ?? []).map((payee) => payee.name),
+    [payeesQuery.data],
+  );
 
   useEffect(() => {
     if (!selectedDueDate) {
@@ -260,13 +278,17 @@ export function TransactionForm({
         dueDate: values.dueDate,
         createdDate: values.type === 'cheque' ? values.createdDate : values.createdDate || todayIso,
         chequeNumber: values.type === 'cheque' ? trimOrEmpty(values.chequeNumber) : null,
-        payee: values.type === 'cheque' ? trimOrEmpty(values.payee) : null,
+        payee: values.type === 'cheque' ? sanitizePayeeName(values.payee) : null,
         description: values.type === 'cheque' ? null : trimOrEmpty(values.description),
         referenceNumber:
           values.type === 'deposit' || values.type === 'withdrawal'
             ? trimOrNull(values.referenceNumber)
             : null,
       });
+
+      if (values.type === 'cheque') {
+        await queryClient.invalidateQueries({ queryKey: ['payees', values.accountId] });
+      }
 
       if (!initialTransaction) {
         reset(defaultValues);
@@ -428,12 +450,25 @@ export function TransactionForm({
 
             <label className="block space-y-1">
               <span className="text-sm font-medium text-slate-700">Payee</span>
-              <input
-                type="text"
-                {...register('payee')}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              <Controller
+                control={control}
+                name="payee"
+                render={({ field }: { field: { value: string; onChange: (value: string) => void; onBlur: () => void } }) => (
+                  <PayeeAutosuggestInput
+                    id="payee"
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    suggestions={payeeSuggestions}
+                    placeholder="Enter payee name"
+                    disabled={isSaving}
+                  />
+                )}
               />
               {errors.payee ? <p className="text-xs text-rose-600">{errors.payee.message}</p> : null}
+              {!errors.payee && payeesQuery.error ? (
+                <p className="text-xs text-amber-600">Unable to load saved payees.</p>
+              ) : null}
             </label>
           </>
         ) : (
