@@ -24,6 +24,7 @@ export type DateFieldMode = 'dueDate' | 'createdDate';
 export type SortDirection = 'asc' | 'desc';
 
 export interface GetTransactionsParams {
+  accountId?: string;
   type?: TransactionType | 'all';
   status?: TransactionStatus | 'all';
   searchText?: string;
@@ -441,6 +442,7 @@ function mapDateField(field: DateFieldMode): 'due_date' | 'created_date' {
 
 export async function getTransactions(params: GetTransactionsParams = {}): Promise<Transaction[]> {
   const {
+    accountId,
     type = 'all',
     status = 'all',
     searchText = '',
@@ -457,6 +459,10 @@ export async function getTransactions(params: GetTransactionsParams = {}): Promi
   } = params;
 
   let query = supabase.from('transactions').select(TRANSACTION_SELECT);
+
+  if (accountId) {
+    query = query.eq('account_id', accountId);
+  }
 
   if (type !== 'all') {
     query = query.eq('type', type);
@@ -521,6 +527,7 @@ export const getTransactionsWithFilters = getTransactions;
 
 export async function countTransactions(params: GetTransactionsParams = {}): Promise<number> {
   const {
+    accountId,
     type = 'all',
     status = 'all',
     searchText = '',
@@ -534,6 +541,10 @@ export async function countTransactions(params: GetTransactionsParams = {}): Pro
   } = params;
 
   let query = supabase.from('transactions').select('id', { count: 'exact', head: true });
+
+  if (accountId) {
+    query = query.eq('account_id', accountId);
+  }
 
   if (type !== 'all') {
     query = query.eq('type', type);
@@ -614,6 +625,35 @@ export async function chequeNumberExistsForAccount(options: {
 }
 
 export const chequeNumberExistsInAccount = chequeNumberExistsForAccount;
+
+export async function getChequesForAccount(accountId: string): Promise<Transaction[]> {
+  return getTransactions({
+    accountId,
+    type: 'cheque',
+    sortBy: 'date',
+    sortDirection: 'asc',
+    dateSortField: 'dueDate',
+  });
+}
+
+export async function updateChequeStatus(
+  transactionId: string,
+  status: Extract<TransactionStatus, 'deducted' | 'cleared'>,
+): Promise<Transaction> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .update({ status })
+    .eq('id', transactionId)
+    .eq('type', 'cheque')
+    .select(TRANSACTION_SELECT)
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error('Unable to update cheque status.');
+  }
+
+  return mapTransaction(data as never);
+}
 
 export async function createTransaction(input: TransactionInput): Promise<Transaction> {
   const payload = normalizeTransactionInput(input);

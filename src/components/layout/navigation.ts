@@ -7,6 +7,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard' },
   { label: 'Calendar', to: '/calendar' },
   { label: 'Transactions', to: '/transactions' },
+  { label: 'Cheques', to: '/cheques' },
   { label: 'Alerts', to: '/notifications' },
   { label: 'Settings', to: '/settings' },
 ];
