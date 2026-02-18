@@ -78,7 +78,6 @@ export function AuthPage() {
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
       <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
         <h1 className="text-2xl font-semibold text-slate-900">Cheque Tracker</h1>
-        <p className="mt-1 text-sm text-slate-500">Secure cheque, deposit, and withdrawal tracking.</p>
 
         <div className="mt-4 flex rounded-lg bg-slate-100 p-1">
           {(['login', 'register', 'reset'] as AuthMode[]).map((item) => (

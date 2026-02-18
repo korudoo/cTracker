@@ -310,16 +310,7 @@ export function CalendarView({
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Cash Flow Calendar</h2>
-          <p className="text-sm text-slate-500">
-            {metric === 'projectedBalance'
-              ? 'Projection rule: current + deposits - cheques - withdrawals (up to selected date).'
-              : metric === 'totalCheques'
-                ? 'Total Cheques view: sum of cheque amounts due on each date regardless of status.'
-                : 'Cleared Balance view: opening + finalized deposits - cleared cheques - deducted withdrawals.'}
-          </p>
-        </div>
+        <h2 className="text-lg font-semibold text-slate-900">Cash Flow Calendar</h2>
 
         <div className="flex items-center gap-2">
           <button
@@ -397,15 +388,8 @@ export function CalendarView({
                 <span className="text-[10px] text-slate-400">{mode === 'AD' ? cell.bsDayLabel : cell.adDayLabel}</span>
               </div>
 
-              <p className="mt-2 text-[11px] text-slate-500">
-                {metric === 'projectedBalance'
-                  ? 'Projected'
-                  : metric === 'totalCheques'
-                    ? 'Total Cheques'
-                    : 'Cleared Balance'}
-              </p>
               <p
-                className={`text-xs font-semibold ${
+                className={`mt-2 text-xs font-semibold ${
                   metric === 'projectedBalance' || metric === 'clearedBalance'
                     ? cellMetricValue >= 0
                       ? 'text-emerald-700'
@@ -420,7 +404,9 @@ export function CalendarView({
                 )}
               </p>
 
-              <p className="mt-1 text-[11px] text-slate-500">Due items: {dueItemsCount}</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {dueItemsCount} {dueItemsCount === 1 ? 'item' : 'items'}
+              </p>
             </button>
           );
         })}

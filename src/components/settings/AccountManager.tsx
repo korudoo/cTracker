@@ -33,7 +33,6 @@ export function AccountManager({ accounts, isSaving, onCreateAccount }: AccountM
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
       <h2 className="text-lg font-semibold text-slate-900">Accounts</h2>
-      <p className="mt-1 text-sm text-slate-500">Cheque numbers are unique per account.</p>
 
       <ul className="mt-4 space-y-2">
         {accounts.map((account) => (

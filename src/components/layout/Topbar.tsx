@@ -20,10 +20,7 @@ export function Topbar({
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-2 sm:px-6">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Cheque Tracker</h1>
-          <p className="text-xs text-slate-500">Track cheques, deposits, and withdrawals</p>
-        </div>
+        <h1 className="text-lg font-semibold text-slate-900">Cheque Tracker</h1>
 
         <nav className="hidden items-center gap-1 lg:flex">
           {NAV_ITEMS.map((item) => (

@@ -25,7 +25,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function CalendarPage() {
-  const { calendarPreference, setCalendarPreference } = useCalendar();
+  const { calendarPreference } = useCalendar();
   const [monthDate, setMonthDate] = useState(new Date());
   const [metric, setMetric] = useState<CalendarMetric>('projectedBalance');
 
@@ -85,11 +85,15 @@ export function CalendarPage() {
     [openingBalance, transactions],
   );
 
-  const setAdMode = useCallback(() => setCalendarPreference('AD'), [setCalendarPreference]);
-  const setBsMode = useCallback(() => setCalendarPreference('BS'), [setCalendarPreference]);
   const setProjectedMetric = useCallback(() => setMetric('projectedBalance'), []);
   const setTotalChequesMetric = useCallback(() => setMetric('totalCheques'), []);
   const setClearedBalanceMetric = useCallback(() => setMetric('clearedBalance'), []);
+  const metricLabel =
+    metric === 'projectedBalance'
+      ? 'Projected Balance'
+      : metric === 'totalCheques'
+        ? 'Total Cheques'
+        : 'Cleared Balance';
 
   if (loading) {
     return <div className="rounded-xl bg-white p-6 shadow-card">Loading calendar...</div>;
@@ -109,37 +113,9 @@ export function CalendarPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Calendar</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              View projected balance, total cheque amount, or cleared balance by date.
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={setAdMode}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                  calendarPreference === 'AD'
-                    ? 'border border-brand-300 bg-brand-50 text-brand-700'
-                    : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                AD
-              </button>
-              <button
-                type="button"
-                onClick={setBsMode}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                  calendarPreference === 'BS'
-                    ? 'border border-brand-300 bg-brand-50 text-brand-700'
-                    : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                BS
-              </button>
-            </div>
-
+          <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -175,6 +151,9 @@ export function CalendarPage() {
                 Cleared Balance
               </button>
             </div>
+            <p className="text-sm text-slate-600">
+              Showing: <span className="font-medium text-slate-800">{metricLabel}</span>
+            </p>
           </div>
         </div>
       </section>

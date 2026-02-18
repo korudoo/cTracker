@@ -232,7 +232,6 @@ export function SettingsPage() {
     <div className="grid gap-5 lg:grid-cols-2">
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
         <h2 className="text-lg font-semibold text-slate-900">Preferences</h2>
-        <p className="mt-1 text-sm text-slate-500">Configure notifications, timezone, and calendar mode.</p>
 
         <form onSubmit={handleSaveProfile} className="mt-4 space-y-3">
           <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -298,9 +297,6 @@ export function SettingsPage() {
 
         <div className="mt-6 border-t border-slate-200 pt-5">
           <h3 className="text-base font-semibold text-slate-900">In-App Notification Rules</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Configure reminder types, timing, and quiet hours for notification scheduling.
-          </p>
 
           {notificationSettings ? (
             <form className="mt-4 space-y-4" onSubmit={handleSaveNotificationSettings}>
@@ -474,9 +470,6 @@ export function SettingsPage() {
 
         <div className="mt-6 border-t border-slate-200 pt-5">
           <h3 className="text-base font-semibold text-slate-900">Opening Balance Adjustment</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Updating opening balance logs a balance adjustment and updates current balance.
-          </p>
 
           {accounts.length ? (
             <form className="mt-4 space-y-3" onSubmit={handleAdjustOpeningBalance}>

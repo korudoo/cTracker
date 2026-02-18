@@ -184,7 +184,6 @@ export function DashboardPage() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
         <h2 className="text-lg font-semibold text-slate-900">Quick Actions</h2>
-        <p className="mt-1 text-sm text-slate-500">Jump to common tasks without opening full filters.</p>
 
         <div className="mt-4 flex flex-wrap gap-2">
           <Link
@@ -213,7 +212,6 @@ export function DashboardPage() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
         <h2 className="text-lg font-semibold text-slate-900">Next 7 Days Cashflow</h2>
-        <p className="mt-1 text-sm text-slate-500">Projected balance at day-end for upcoming dates.</p>
 
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200 text-sm">

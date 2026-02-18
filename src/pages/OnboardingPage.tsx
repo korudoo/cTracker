@@ -76,9 +76,6 @@ export function OnboardingPage() {
       <section className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Step 1 of 1</p>
         <h1 className="mt-1 text-2xl font-semibold text-slate-900">Set up your first account</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Create your default account and initial opening balance.
-        </p>
 
         <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
           <label className="block space-y-1">

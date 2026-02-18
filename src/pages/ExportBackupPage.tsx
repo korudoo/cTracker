@@ -176,9 +176,6 @@ export function ExportBackupPage() {
     <div className="space-y-5">
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
         <h2 className="text-lg font-semibold text-slate-900">Export & Backup</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Export your transaction data as CSV or Excel. Large datasets automatically use a server export endpoint.
-        </p>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
