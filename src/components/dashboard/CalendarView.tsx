@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CalendarMode, Transaction } from '@/types/domain';
 import {
   calculateProjectedBalancesForRange,
@@ -17,6 +17,7 @@ import {
   shiftBsMonthParts,
 } from '@/utils/nepaliDate';
 import { getChequeTextColor } from '@/utils/calendarMetricColor';
+import { getTodayIsoInKathmandu } from '@/utils/transactionStatus';
 import { CalendarDateDetailModal } from '@/components/dashboard/CalendarDateDetailModal';
 
 export type CalendarMetric = 'projectedBalance' | 'totalCheques' | 'clearedBalance';
@@ -29,6 +30,7 @@ interface CalendarViewProps {
   monthDate: Date;
   transactions: Transaction[];
   onMonthDateChange: (nextDate: Date) => void;
+  deepLinkDateIso?: string | null;
 }
 
 interface CalendarGridCell {
@@ -221,11 +223,13 @@ export function CalendarView({
   monthDate,
   transactions,
   onMonthDateChange,
+  deepLinkDateIso = null,
 }: CalendarViewProps) {
   const gridData = useMemo(() => getGridData(mode, monthDate), [mode, monthDate]);
-  const today = new Date();
-  const todayIso = toIsoDate(today);
+  const todayIso = getTodayIsoInKathmandu();
+  const today = fromIsoDate(todayIso);
   const [selectedDateIso, setSelectedDateIso] = useState<string | null>(null);
+  const [consumedDeepLinkDateIso, setConsumedDeepLinkDateIso] = useState<string | null>(null);
   const dueCountByDate = useMemo(() => {
     const counts: Record<string, number> = {};
     transactions.forEach((transaction) => {
@@ -283,6 +287,15 @@ export function CalendarView({
   );
 
   const projectionByDate = projection.byDate;
+
+  useEffect(() => {
+    if (!deepLinkDateIso || deepLinkDateIso === consumedDeepLinkDateIso) {
+      return;
+    }
+
+    setSelectedDateIso(deepLinkDateIso);
+    setConsumedDeepLinkDateIso(deepLinkDateIso);
+  }, [consumedDeepLinkDateIso, deepLinkDateIso]);
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-card sm:p-4">

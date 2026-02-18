@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdvancedFiltersPanel } from '@/components/transactions/AdvancedFiltersPanel';
 import { QuickRangeDropdown } from '@/components/transactions/QuickRangeDropdown';
@@ -16,7 +17,7 @@ import {
   runDueStatusTransition,
   updateTransaction,
 } from '@/services/transactions';
-import type { Transaction, TransactionInput } from '@/types/domain';
+import { TRANSACTION_TYPES, type Transaction, type TransactionInput, type TransactionType } from '@/types/domain';
 import {
   DEFAULT_TRANSACTION_FILTERS,
   type TransactionFilters,
@@ -45,6 +46,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function TransactionsPage() {
+  const [searchParams] = useSearchParams();
   const { mode } = useCalendar();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_TRANSACTION_FILTERS);
@@ -53,7 +55,18 @@ export function TransactionsPage() {
   const [quickRange, setQuickRange] = useState<QuickRangeValue>('');
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const dateFromInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const advancedPanelId = 'transactions-advanced-filters-panel';
+  const quickType = useMemo(() => {
+    const requestedType = searchParams.get('type');
+    if (!requestedType) {
+      return null;
+    }
+
+    return TRANSACTION_TYPES.includes(requestedType as TransactionType)
+      ? (requestedType as TransactionType)
+      : null;
+  }, [searchParams]);
 
   const profileQuery = useQuery({
     queryKey: ['profile'],
@@ -227,6 +240,20 @@ export function TransactionsPage() {
     });
   }, [appliedSummary, transactionParams]);
 
+  useEffect(() => {
+    if (searchParams.get('focus') !== 'search') {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [searchParams]);
+
   const isLoadingInitial =
     profileQuery.isPending ||
     accountsQuery.isPending ||
@@ -327,6 +354,7 @@ export function TransactionsPage() {
         accounts={accounts}
         calendarMode={mode}
         initialTransaction={editing}
+        quickType={quickType}
         isSaving={saveMutation.isPending}
         onSubmit={handleSave}
         onCancelEdit={() => setEditing(null)}
@@ -337,6 +365,7 @@ export function TransactionsPage() {
           <label className="block min-w-[15rem] flex-1 space-y-1">
             <span className="text-sm font-medium text-slate-700">Search</span>
             <input
+              ref={searchInputRef}
               type="text"
               value={filters.searchText}
               onChange={(event) => updateFilter('searchText', event.target.value)}

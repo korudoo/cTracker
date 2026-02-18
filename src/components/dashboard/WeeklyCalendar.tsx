@@ -5,6 +5,7 @@ import { calculateProjectedBalancesForRange, computeClearedBalancesByDate } from
 import { fromIsoDate, toIsoDate } from '@/utils/date';
 import { getBsDatePartsFromAd, getBsMonthName } from '@/utils/nepaliDate';
 import { getChequeTextColor } from '@/utils/calendarMetricColor';
+import { getTodayIsoInKathmandu } from '@/utils/transactionStatus';
 import type { CalendarMetric } from '@/components/dashboard/CalendarView';
 import { CalendarDateDetailModal } from '@/components/dashboard/CalendarDateDetailModal';
 
@@ -154,8 +155,8 @@ export function WeeklyCalendar({
   currentBalance,
   transactions,
 }: WeeklyCalendarProps) {
-  const today = new Date();
-  const todayIso = toIsoDate(today);
+  const todayIso = getTodayIsoInKathmandu();
+  const today = fromIsoDate(todayIso);
   const currentWeekStartIso = toIsoDate(startOfWeek(today));
   const [weekStartDate, setWeekStartDate] = useState<Date>(() => startOfWeek(today));
   const [selectedDateIso, setSelectedDateIso] = useState<string | null>(null);

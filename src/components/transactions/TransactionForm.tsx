@@ -29,6 +29,7 @@ interface TransactionFormProps {
   accounts: Account[];
   calendarMode: CalendarMode;
   initialTransaction: Transaction | null;
+  quickType?: TransactionType | null;
   isSaving: boolean;
   onSubmit: (payload: TransactionInput) => Promise<void>;
   onCancelEdit: () => void;
@@ -47,12 +48,16 @@ interface TransactionFormValues {
   referenceNumber: string;
 }
 
-function getDefaultValues(accounts: Account[]): TransactionFormValues {
+function getDefaultValues(
+  accounts: Account[],
+  quickType: TransactionType | null | undefined,
+): TransactionFormValues {
   const today = toIsoDate(new Date());
+  const type = quickType ?? 'cheque';
   return {
     accountId: accounts[0]?.id ?? '',
-    type: 'cheque',
-    status: 'deducted',
+    type,
+    status: type === 'cheque' ? 'deducted' : 'pending',
     amount: 0,
     dueDate: today,
     createdDate: today,
@@ -91,6 +96,7 @@ export function TransactionForm({
   accounts,
   calendarMode,
   initialTransaction,
+  quickType,
   isSaving,
   onSubmit,
   onCancelEdit,
@@ -188,7 +194,7 @@ export function TransactionForm({
     [todayIso],
   );
 
-  const defaultValues = useMemo(() => getDefaultValues(accounts), [accounts]);
+  const defaultValues = useMemo(() => getDefaultValues(accounts, quickType), [accounts, quickType]);
 
   const {
     control,

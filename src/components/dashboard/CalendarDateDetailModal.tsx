@@ -3,6 +3,7 @@ import type { ProjectionResult } from '@/utils/balanceProjection';
 import { getDateProjectionDetail } from '@/utils/balanceProjection';
 import { formatDualDate } from '@/utils/nepaliDate';
 import { getTransactionStatusLabel } from '@/utils/transactionStatus';
+import { getCalendarDateTotals, getTransactionsForDate } from '@/utils/calendarDay';
 import type { Transaction } from '@/types/domain';
 
 interface CalendarDateDetailModalProps {
@@ -37,25 +38,13 @@ export function CalendarDateDetailModal({
       return [];
     }
 
-    return [...transactions]
-      .filter((transaction) => transaction.dueDate === selectedDateIso)
-      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    return getTransactionsForDate(transactions, selectedDateIso);
   }, [selectedDateIso, transactions]);
 
-  const selectedDateTotals = useMemo(() => {
-    const deposits = selectedDateTransactions
-      .filter((transaction) => transaction.type === 'deposit')
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-
-    const deductions = selectedDateTransactions
-      .filter((transaction) => transaction.type === 'cheque' || transaction.type === 'withdrawal')
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-
-    return {
-      deposits,
-      deductions,
-    };
-  }, [selectedDateTransactions]);
+  const selectedDateTotals = useMemo(
+    () => getCalendarDateTotals(selectedDateTransactions),
+    [selectedDateTransactions],
+  );
 
   const selectedProjection = useMemo(() => {
     if (!selectedDateIso) {

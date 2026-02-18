@@ -1,11 +1,14 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CalendarView, type CalendarMetric } from '@/components/dashboard/CalendarView';
 import { WeeklyCalendar } from '@/components/dashboard/WeeklyCalendar';
 import { useCalendar } from '@/context/CalendarContext';
 import { calculateCurrentBalance } from '@/utils/balance';
+import { fromIsoDate } from '@/utils/date';
 import type { Account, Transaction } from '@/types/domain';
 import { getAccounts, getProfile, getTransactions, runDueStatusTransition } from '@/services/transactions';
 import { useQuery } from '@tanstack/react-query';
+import { getTodayIsoInKathmandu, isIsoDate } from '@/utils/transactionStatus';
 
 const EMPTY_ACCOUNTS: Account[] = [];
 const EMPTY_TRANSACTIONS: Transaction[] = [];
@@ -26,9 +29,16 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function CalendarPage() {
+  const [searchParams] = useSearchParams();
   const { calendarPreference } = useCalendar();
-  const [monthDate, setMonthDate] = useState(new Date());
+  const [monthDate, setMonthDate] = useState(() => fromIsoDate(getTodayIsoInKathmandu()));
   const [metric, setMetric] = useState<CalendarMetric>('projectedBalance');
+  const [appliedDeepLinkIso, setAppliedDeepLinkIso] = useState<string | null>(null);
+
+  const deepLinkDateIso = useMemo(() => {
+    const dateParam = searchParams.get('date');
+    return dateParam && isIsoDate(dateParam) ? dateParam : null;
+  }, [searchParams]);
 
   const profileQuery = useQuery({
     queryKey: ['profile'],
@@ -95,6 +105,16 @@ export function CalendarPage() {
       : metric === 'totalCheques'
         ? 'Total Cheques'
         : 'Cleared Balance';
+
+  useEffect(() => {
+    if (!deepLinkDateIso || deepLinkDateIso === appliedDeepLinkIso) {
+      return;
+    }
+
+    const [yearPart, monthPart, dayPart] = deepLinkDateIso.split('-').map(Number);
+    setMonthDate(new Date(yearPart, monthPart - 1, dayPart));
+    setAppliedDeepLinkIso(deepLinkDateIso);
+  }, [appliedDeepLinkIso, deepLinkDateIso]);
 
   if (loading) {
     return <div className="rounded-xl bg-white p-6 shadow-card">Loading calendar...</div>;
@@ -170,6 +190,7 @@ export function CalendarPage() {
         monthDate={monthDate}
         transactions={transactions}
         onMonthDateChange={setMonthDate}
+        deepLinkDateIso={deepLinkDateIso}
       />
 
       <WeeklyCalendar

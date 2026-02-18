@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { TableSortHeader } from '@/components/common/TableSortHeader';
 import { useCalendar } from '@/context/CalendarContext';
@@ -25,6 +26,14 @@ interface ToastState {
 interface StatusMutationPayload {
   transactionId: string;
   nextStatus: Extract<TransactionStatus, 'deducted' | 'cleared'>;
+}
+
+function parseChequeView(value: string | null): ChequeView {
+  if (value === 'past' || value === 'future' || value === 'all' || value === 'cleared') {
+    return value;
+  }
+
+  return 'all';
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -100,14 +109,26 @@ function filterChequesForView(cheques: Transaction[], view: ChequeView, todayIso
 }
 
 export function ChequesPage() {
+  const [searchParams] = useSearchParams();
   const { mode } = useCalendar();
   const queryClient = useQueryClient();
   const [selectedAccountId, setSelectedAccountId] = useState('');
-  const [view, setView] = useState<ChequeView>('all');
+  const [view, setView] = useState<ChequeView>(() => parseChequeView(searchParams.get('view')));
   const [sortKey, setSortKey] = useState<ChequeSortKey>('dueDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [toast, setToast] = useState<ToastState | null>(null);
   const todayIso = getTodayIsoInKathmandu();
+  const requestedView = parseChequeView(searchParams.get('view'));
+  const lastAppliedRequestedView = useRef(requestedView);
+
+  useEffect(() => {
+    if (requestedView === lastAppliedRequestedView.current) {
+      return;
+    }
+
+    lastAppliedRequestedView.current = requestedView;
+    setView(requestedView);
+  }, [requestedView]);
 
   const profileQuery = useQuery({
     queryKey: ['profile'],
