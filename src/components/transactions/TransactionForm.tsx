@@ -3,6 +3,7 @@ import { Controller, useForm, type SubmitHandler } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AmountInput } from '@/components/common/AmountInput';
 import { DateField } from '@/components/common/DateField';
 import { PayeeAutosuggestInput } from '@/components/transactions/PayeeAutosuggestInput';
 import type {
@@ -39,7 +40,7 @@ interface TransactionFormValues {
   accountId: string;
   type: TransactionType;
   status: TransactionStatus;
-  amount: number;
+  amount: string;
   dueDate: string;
   createdDate: string;
   chequeNumber: string;
@@ -58,7 +59,7 @@ function getDefaultValues(
     accountId: accounts[0]?.id ?? '',
     type,
     status: type === 'cheque' ? 'deducted' : 'pending',
-    amount: 0,
+    amount: '0',
     dueDate: today,
     createdDate: today,
     chequeNumber: '',
@@ -73,7 +74,7 @@ function mapTransactionToForm(transaction: Transaction): TransactionFormValues {
     accountId: transaction.accountId,
     type: transaction.type,
     status: transaction.status,
-    amount: transaction.amount,
+    amount: String(transaction.amount),
     dueDate: transaction.dueDate,
     createdDate: transaction.createdDate,
     chequeNumber: transaction.chequeNumber ?? '',
@@ -121,10 +122,21 @@ export function TransactionForm({
             .required('Status is required.')
             .defined(),
           amount: yup
-            .number()
-            .typeError('Amount must be a number.')
-            .moreThan(0, 'Amount must be greater than 0.')
+            .string()
             .required('Amount is required.')
+            .test('amount-valid-number', 'Amount must be a number.', (value) => {
+              if (!value) {
+                return false;
+              }
+              const parsed = Number(value);
+              return Number.isFinite(parsed);
+            })
+            .test('amount-greater-than-zero', 'Amount must be greater than 0.', (value) => {
+              if (!value) {
+                return false;
+              }
+              return Number(value) > 0;
+            })
             .defined(),
           dueDate: yup
             .string()
@@ -354,12 +366,24 @@ export function TransactionForm({
 
         <label className="block space-y-1">
           <span className="text-sm font-medium text-slate-700">Amount</span>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            {...register('amount', { valueAsNumber: true })}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+          <Controller
+            control={control}
+            name="amount"
+            render={({ field }) => (
+              <AmountInput
+                id="transaction-amount"
+                name={field.name}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                disabled={isSaving}
+                required
+                allowDecimal
+                autoComplete="off"
+                placeholder="0.00"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              />
+            )}
           />
           {errors.amount ? <p className="text-xs text-rose-600">{errors.amount.message}</p> : null}
         </label>

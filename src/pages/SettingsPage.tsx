@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { AmountInput } from '@/components/common/AmountInput';
 import { AccountManager } from '@/components/settings/AccountManager';
 import { useCalendar } from '@/context/CalendarContext';
 import {
@@ -171,7 +172,7 @@ export function SettingsPage() {
     setError(null);
     setMessage(null);
 
-    const parsedOpeningBalance = Number(newOpeningBalance);
+    const parsedOpeningBalance = Number(newOpeningBalance.replace(/,/g, '').trim());
     if (!selectedAccountId) {
       setError('Select an account first.');
       setAdjustingBalance(false);
@@ -505,11 +506,12 @@ export function SettingsPage() {
 
               <label className="block space-y-1">
                 <span className="text-sm font-medium text-slate-700">New opening balance</span>
-                <input
-                  type="number"
-                  step="0.01"
+                <AmountInput
+                  id="new-opening-balance"
                   value={newOpeningBalance}
-                  onChange={(event) => setNewOpeningBalance(event.target.value)}
+                  onChange={setNewOpeningBalance}
+                  allowDecimal
+                  autoComplete="off"
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
                   required
                 />
