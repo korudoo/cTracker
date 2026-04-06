@@ -7,7 +7,6 @@ import { TransactionForm } from '@/components/transactions/TransactionForm';
 import { TransactionTable } from '@/components/transactions/TransactionTable';
 import { useCalendar } from '@/context/CalendarContext';
 import {
-  chequeNumberExistsInAccount,
   createTransaction,
   deleteTransaction,
   getAccounts,
@@ -15,7 +14,6 @@ import {
   getProfile,
   getTransactions,
   runDueStatusTransition,
-  updateTransaction,
 } from '@/services/transactions';
 import { TRANSACTION_TYPES, type Transaction, type TransactionInput, type TransactionType } from '@/types/domain';
 import {
@@ -50,7 +48,6 @@ export function TransactionsPage() {
   const { mode } = useCalendar();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_TRANSACTION_FILTERS);
-  const [editing, setEditing] = useState<Transaction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [quickRange, setQuickRange] = useState<QuickRangeValue>('');
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
@@ -131,41 +128,13 @@ export function TransactionsPage() {
   const accounts = accountsQuery.data ?? [];
 
   const saveMutation = useMutation({
-    mutationFn: async (payload: TransactionInput) => {
-      if (payload.type === 'cheque' && payload.chequeNumber) {
-        const normalizedChequeNumber = payload.chequeNumber.trim().toLowerCase();
-        const duplicateInList = transactions.some(
-          (transaction) =>
-            transaction.type === 'cheque' &&
-            transaction.accountId === payload.accountId &&
-            transaction.id !== (editing?.id ?? '') &&
-            (transaction.chequeNumber ?? '').trim().toLowerCase() === normalizedChequeNumber,
-        );
-
-        if (duplicateInList) {
-          throw new Error('Cheque number already exists for this account.');
-        }
-
-        const duplicateInDb = await chequeNumberExistsInAccount({
-          accountId: payload.accountId,
-          chequeNumber: payload.chequeNumber,
-          excludeTransactionId: editing?.id,
-        });
-
-        if (duplicateInDb) {
-          throw new Error('Cheque number already exists for this account.');
-        }
-      }
-
-      if (editing) {
-        return updateTransaction(editing.id, payload);
-      }
-
-      return createTransaction(payload);
-    },
+    mutationFn: async (payload: TransactionInput) => createTransaction(payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      setEditing(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['transactions'] }),
+        queryClient.invalidateQueries({ queryKey: ['cheques'] }),
+        queryClient.invalidateQueries({ queryKey: ['accounts'] }),
+      ]);
       setActionError(null);
     },
     onError: (error: unknown) => {
@@ -175,12 +144,13 @@ export function TransactionsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (transactionId: string) => deleteTransaction(transactionId),
-    onSuccess: async (_, transactionId) => {
-      await queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['transactions'] }),
+        queryClient.invalidateQueries({ queryKey: ['cheques'] }),
+        queryClient.invalidateQueries({ queryKey: ['accounts'] }),
+      ]);
       setActionError(null);
-      if (editing?.id === transactionId) {
-        setEditing(null);
-      }
     },
     onError: (error: unknown) => {
       setActionError(getErrorMessage(error, 'Unable to delete transaction.'));
@@ -353,11 +323,11 @@ export function TransactionsPage() {
       <TransactionForm
         accounts={accounts}
         calendarMode={mode}
-        initialTransaction={editing}
+        initialTransaction={null}
         quickType={quickType}
         isSaving={saveMutation.isPending}
         onSubmit={handleSave}
-        onCancelEdit={() => setEditing(null)}
+        onCancelEdit={() => undefined}
       />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
@@ -424,7 +394,6 @@ export function TransactionsPage() {
         calendarMode={mode}
         dateField={filters.sortBy === 'date' ? filters.dateSortField : filters.dateField}
         emptyMessage="No transactions found for the selected filters."
-        onEdit={(transaction) => setEditing(transaction)}
         onDelete={handleDelete}
       />
     </div>

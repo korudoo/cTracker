@@ -1,3 +1,5 @@
+import type { MouseEvent } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import type { CalendarMode, Transaction } from '@/types/domain';
 import { formatDateForMode } from '@/utils/nepaliDate';
@@ -9,7 +11,6 @@ interface TransactionTableProps {
   calendarMode: CalendarMode;
   dateField: DateFieldMode;
   emptyMessage?: string;
-  onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
 }
 
@@ -36,10 +37,25 @@ export function TransactionTable({
   calendarMode,
   dateField,
   emptyMessage = 'No transactions match the current filters.',
-  onEdit,
   onDelete,
 }: TransactionTableProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const dateLabel = dateField === 'createdDate' ? 'Created Date' : 'Due Date';
+
+  const handleEditClick = (event: MouseEvent<HTMLButtonElement>, transaction: Transaction) => {
+    event.stopPropagation();
+    navigate(`/transactions/${transaction.id}/edit`, {
+      state: {
+        returnTo: `${location.pathname}${location.search}`,
+      },
+    });
+  };
+
+  const handleDeleteClick = (event: MouseEvent<HTMLButtonElement>, transaction: Transaction) => {
+    event.stopPropagation();
+    onDelete(transaction);
+  };
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
@@ -92,14 +108,14 @@ export function TransactionTable({
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => onEdit(transaction)}
+                      onClick={(event) => handleEditClick(event, transaction)}
                       className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                     >
                       Edit
                     </button>
                     <button
                       type="button"
-                      onClick={() => onDelete(transaction)}
+                      onClick={(event) => handleDeleteClick(event, transaction)}
                       className="rounded-md border border-rose-300 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
                     >
                       Delete

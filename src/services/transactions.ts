@@ -209,7 +209,7 @@ function normalizeTransactionInput(input: TransactionInput) {
   };
 }
 
-async function getTransactionById(transactionId: string): Promise<Transaction> {
+export async function getTransactionById(transactionId: string): Promise<Transaction> {
   const { data, error } = await supabase
     .from('transactions')
     .select(TRANSACTION_SELECT)

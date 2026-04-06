@@ -5,6 +5,7 @@ import { CalendarPage } from '@/pages/CalendarPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { TransactionsPage } from '@/pages/TransactionsPage';
+import { EditTransactionPage } from '@/pages/EditTransactionPage';
 import { ChequesPage } from '@/pages/ChequesPage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
 import { ExportBackupPage } from '@/pages/ExportBackupPage';
@@ -24,6 +25,7 @@ function App() {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
+            <Route path="/transactions/:transactionId/edit" element={<EditTransactionPage />} />
             <Route path="/cheques" element={<ChequesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/export" element={<ExportBackupPage />} />
